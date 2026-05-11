@@ -100,6 +100,10 @@ fun ViewerScreen(
     var currentExif by remember { mutableStateOf(MediaExif()) }
     val infoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
+    // Holds the display name of the item being edited so the result callback doesn't
+    // need to reference currentItem (which isn't in scope at launcher definition time).
+    var editingDisplayName by remember { mutableStateOf("") }
+
     // UCrop result launcher
     val editLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -107,9 +111,10 @@ fun ViewerScreen(
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val outputUri = UCrop.getOutput(result.data!!)
             if (outputUri != null) {
+                val displayName = editingDisplayName
                 scope.launch {
                     val saved = withContext(Dispatchers.IO) {
-                        EditHelper.saveToMediaStore(context, outputUri, currentItem.displayName)
+                        EditHelper.saveToMediaStore(context, outputUri, displayName)
                     }
                     EditHelper.cleanupCacheFile(outputUri)
                     Toast.makeText(
@@ -226,6 +231,7 @@ fun ViewerScreen(
                 }
                 if (!currentItem.isVideo) {
                     IconButton(onClick = {
+                        editingDisplayName = currentItem.displayName
                         val intent = EditHelper.buildCropIntent(
                             context = context,
                             sourceUri = currentItem.uri,
