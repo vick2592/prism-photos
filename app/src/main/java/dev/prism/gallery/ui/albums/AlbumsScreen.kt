@@ -41,7 +41,7 @@ import dev.prism.gallery.domain.model.Album
 
 @Composable
 fun AlbumsScreen(
-    onAlbumClick: (bucketId: Long, albumName: String) -> Unit = { _, _ -> },
+    onAlbumClick: (bucketId: String, albumName: String) -> Unit = { _, _ -> },
     onTrashClick: () -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(),
     viewModel: AlbumsViewModel = hiltViewModel(),

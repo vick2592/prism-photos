@@ -18,7 +18,7 @@ class AlbumDetailViewModel @Inject constructor(
     repository: MediaStoreRepository,
 ) : ViewModel() {
 
-    private val bucketId: Long = checkNotNull(savedStateHandle["bucketId"])
+    private val bucketId: String = checkNotNull(savedStateHandle["bucketId"])
 
     val items: StateFlow<List<MediaItem>> = repository.observeMedia()
         .map { all -> all.filter { it.bucketId == bucketId } }

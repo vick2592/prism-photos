@@ -38,8 +38,8 @@ sealed class Screen(val route: String) {
         fun createRoute(mediaId: Long) = "viewer/$mediaId"
     }
     data object AlbumDetail : Screen("album_detail/{bucketId}/{albumName}") {
-        fun createRoute(bucketId: Long, albumName: String) =
-            "album_detail/$bucketId/${android.net.Uri.encode(albumName)}"
+        fun createRoute(bucketId: String, albumName: String) =
+            "album_detail/${android.net.Uri.encode(bucketId)}/${android.net.Uri.encode(albumName)}"
     }
     data object Trash : Screen("trash")
 }
@@ -108,8 +108,8 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
                     contentPadding = paddingValues,
                     onAlbumClick = { bucketId, albumName ->
                         navController.navigate(Screen.AlbumDetail.createRoute(bucketId, albumName))
-                    },
-                    onTrashClick = { navController.navigate(Screen.Trash.route) },
+                },
+                onTrashClick = { navController.navigate(Screen.Trash.route) },
                 )
             }
             composable(Screen.Search.route) {
@@ -136,11 +136,13 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
             composable(
                 route = Screen.AlbumDetail.route,
                 arguments = listOf(
-                    navArgument("bucketId") { type = NavType.LongType },
+                    navArgument("bucketId") { type = NavType.StringType },
                     navArgument("albumName") { type = NavType.StringType },
                 ),
             ) { backStackEntry ->
-                val bucketId = backStackEntry.arguments?.getLong("bucketId") ?: 0L
+                val bucketId = android.net.Uri.decode(
+                    backStackEntry.arguments?.getString("bucketId") ?: ""
+                )
                 val albumName = android.net.Uri.decode(
                     backStackEntry.arguments?.getString("albumName") ?: ""
                 )
