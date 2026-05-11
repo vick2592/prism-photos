@@ -83,7 +83,7 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
     var bottomBarVisible by remember { mutableStateOf(showBottomBar) }
     LaunchedEffect(showBottomBar) {
         if (showBottomBar) {
-            delay(220)
+            delay(80)
             bottomBarVisible = true
         } else {
             bottomBarVisible = false

@@ -354,12 +354,13 @@ private fun ZoomableImage(
                     onDragEnd = {
                         scope.launch {
                             if (dismissOffset.value > 200f) {
-                                // Fly off screen then navigate back
+                                // Navigate back immediately so grid is responsive,
+                                // let the fly-off animate briefly behind the transition.
+                                onDismiss()
                                 dismissOffset.animateTo(
                                     targetValue = 1400f,
-                                    animationSpec = tween(durationMillis = 220),
+                                    animationSpec = tween(durationMillis = 120),
                                 )
-                                onDismiss()
                             } else {
                                 // Spring back into place
                                 dismissOffset.animateTo(

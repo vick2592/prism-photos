@@ -3,8 +3,10 @@ package dev.prism.gallery.ui.viewer
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import com.yalantis.ucrop.UCrop
 import java.io.File
@@ -79,6 +81,19 @@ object EditHelper {
                 values.put(MediaStore.Images.Media.IS_PENDING, 0)
                 values.put(MediaStore.Images.Media.DATE_TAKEN, now)
                 context.contentResolver.update(outputUri, values, null, null)
+            }
+
+            // Explicitly tell MediaScanner to index the file so it appears
+            // in Prism's grid immediately rather than waiting for a passive scan.
+            val dcimPrism = Environment.getExternalStoragePublicDirectory("DCIM/Prism")
+            val savedFile = File(dcimPrism, newName)
+            if (savedFile.exists()) {
+                MediaScannerConnection.scanFile(
+                    context,
+                    arrayOf(savedFile.absolutePath),
+                    arrayOf(mimeType),
+                    null,
+                )
             }
 
             outputUri
