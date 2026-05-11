@@ -175,4 +175,4 @@ Prism is 100% local. It:
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+GNU General Public License v3.0 — see [LICENSE](LICENSE) for details.
