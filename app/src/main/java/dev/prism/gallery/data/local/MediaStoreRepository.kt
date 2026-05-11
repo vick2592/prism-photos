@@ -1,0 +1,126 @@
+package dev.prism.gallery.data.local
+
+import android.content.ContentUris
+import android.content.Context
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.prism.gallery.data.model.MediaItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class MediaStoreRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
+    /**
+     * Returns a [Flow] that emits the full media list immediately, then re-emits
+     * whenever the Camera (or any app) saves a new photo or video to MediaStore.
+     * This is the core mechanism that gives Prism instant photo detection.
+     */
+    fun observeMedia(): Flow<List<MediaItem>> = callbackFlow {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                launch { send(queryAllMedia()) }
+            }
+        }
+        context.contentResolver.registerContentObserver(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer
+        )
+        context.contentResolver.registerContentObserver(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, observer
+        )
+        // Emit initial value immediately
+        send(queryAllMedia())
+        awaitClose {
+            context.contentResolver.unregisterContentObserver(observer)
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private fun queryAllMedia(): List<MediaItem> {
+        val items = mutableListOf<MediaItem>()
+        items += queryUri(
+            uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            isVideo = false,
+        )
+        items += queryUri(
+            uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            isVideo = true,
+        )
+        return items.sortedByDescending { it.dateTaken }
+    }
+
+    private fun queryUri(uri: Uri, isVideo: Boolean): List<MediaItem> {
+        val items = mutableListOf<MediaItem>()
+
+        val baseProjection = arrayOf(
+            MediaStore.MediaColumns._ID,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.DATE_TAKEN,
+            MediaStore.MediaColumns.DATE_MODIFIED,
+            MediaStore.MediaColumns.MIME_TYPE,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.BUCKET_ID,
+            MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
+        )
+        val projection = if (isVideo) {
+            baseProjection + arrayOf(MediaStore.Video.VideoColumns.DURATION)
+        } else {
+            baseProjection
+        }
+
+        context.contentResolver.query(
+            uri,
+            projection,
+            null,
+            null,
+            "${MediaStore.MediaColumns.DATE_TAKEN} DESC",
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+            val dateTakenCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
+            val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
+            val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+            val widthCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
+            val heightCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+            val bucketIdCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
+            val bucketNameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            val durationCol = if (isVideo) cursor.getColumnIndex(MediaStore.Video.VideoColumns.DURATION) else -1
+
+            while (cursor.moveToNext()) {
+                val mimeType = cursor.getString(mimeCol) ?: continue
+                val id = cursor.getLong(idCol)
+                val contentUri = ContentUris.withAppendedId(uri, id)
+                val duration = if (isVideo && durationCol != -1) cursor.getLong(durationCol) else 0L
+
+                items += MediaItem(
+                    id = id,
+                    uri = contentUri,
+                    displayName = cursor.getString(nameCol) ?: "",
+                    dateTaken = cursor.getLong(dateTakenCol),
+                    dateModified = cursor.getLong(dateModifiedCol),
+                    mimeType = mimeType,
+                    width = cursor.getInt(widthCol),
+                    height = cursor.getInt(heightCol),
+                    size = cursor.getLong(sizeCol),
+                    bucketId = cursor.getString(bucketIdCol) ?: "",
+                    bucketName = cursor.getString(bucketNameCol) ?: "Unknown",
+                    duration = duration,
+                )
+            }
+        }
+        return items
+    }
+}

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Media permissions: Android 13+ (API 33+) -->
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        android:minSdkVersion="33" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO"
+        android:minSdkVersion="33" />
+
+    <!-- Media permissions: Android 8–12 (API 26–32) -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Write permission for saving edited photos (API 28 and below) -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Needed for TrashMediaUseCase (Android 11+) -->
+    <uses-permission android:name="android.permission.MANAGE_MEDIA" />
+
+    <!-- Wallpaper -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
+    <application
+        android:name=".PrismApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Prism">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- UCrop: required for image crop/rotate in Phase 6 -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
+    </application>
+
+</manifest>
