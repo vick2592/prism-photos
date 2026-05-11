@@ -35,6 +35,7 @@ import dev.prism.gallery.ui.albums.AlbumsScreen
 import dev.prism.gallery.ui.gallery.GalleryScreen
 import dev.prism.gallery.ui.search.SearchScreen
 import dev.prism.gallery.ui.settings.SettingsScreen
+import dev.prism.gallery.ui.slideshow.SlideshowScreen
 import dev.prism.gallery.ui.trash.TrashScreen
 import dev.prism.gallery.ui.viewer.ViewerScreen
 
@@ -51,6 +52,7 @@ sealed class Screen(val route: String) {
             "album_detail/${android.net.Uri.encode(bucketId)}/${android.net.Uri.encode(albumName)}"
     }
     data object Trash : Screen("trash")
+    data object Slideshow : Screen("slideshow")
 }
 
 data class BottomNavItem(
@@ -74,6 +76,7 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
         Screen.Viewer.route,
         Screen.AlbumDetail.route,
         Screen.Trash.route,
+        Screen.Slideshow.route,
     )
 
     // Delay showing the nav bar so it doesn't flash over the viewer exit transition
@@ -124,6 +127,7 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
                     onMediaClick = { mediaId ->
                         navController.navigate(Screen.Viewer.createRoute(mediaId))
                     },
+                    onSlideshowClick = { navController.navigate(Screen.Slideshow.route) },
                     contentPadding = paddingValues,
                 )
             }
@@ -180,6 +184,9 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
             }
             composable(Screen.Trash.route) {
                 TrashScreen(onNavigateBack = { navController.navigateUp() })
+            }
+            composable(Screen.Slideshow.route) {
+                SlideshowScreen(onNavigateBack = { navController.navigateUp() })
             }
         }
     }

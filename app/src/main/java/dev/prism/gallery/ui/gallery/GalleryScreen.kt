@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,10 +31,12 @@ import dev.prism.gallery.ui.components.MediaGrid
 @Composable
 fun GalleryScreen(
     onMediaClick: (Long) -> Unit,
+    onSlideshowClick: () -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(),
     viewModel: GalleryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val gridColumns by viewModel.gridColumns.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -117,11 +124,26 @@ fun GalleryScreen(
                     )
                 }
             } else {
-                MediaGrid(
-                    mediaGroups = state.mediaGroups,
-                    onMediaClick = onMediaClick,
-                    contentPadding = contentPadding,
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MediaGrid(
+                        mediaGroups = state.mediaGroups,
+                        onMediaClick = onMediaClick,
+                        contentPadding = contentPadding,
+                        columns = gridColumns,
+                    )
+                    FloatingActionButton(
+                        onClick = onSlideshowClick,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(
+                                end = 16.dp,
+                                bottom = contentPadding.calculateBottomPadding() + 16.dp,
+                            ),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "Slideshow")
+                    }
+                }
             }
         }
     }
