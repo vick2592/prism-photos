@@ -9,10 +9,11 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import kotlin.math.abs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -117,9 +118,17 @@ fun ViewerScreen(
                         alpha = 0.5f + 0.5f * fraction
                     },
             ) {
-                if (item.isVideo) {
+                if (item.isVideo && page == pagerState.currentPage) {
                     VideoPlayerScreen(
                         uri = item.uri,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else if (item.isVideo) {
+                    // Thumbnail for adjacent video pages — PlayerView would consume swipes
+                    AsyncImage(
+                        model = item.uri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -246,23 +255,48 @@ private fun ZoomableImage(
     var panY by remember { mutableFloatStateOf(0f) }
     val dismissOffset = remember { Animatable(0f) }
 
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
-        scale = newScale
-        if (scale > 1.05f) {
-            panX += panChange.x
-            panY += panChange.y
-        } else {
-            scale = 1f
-            panX = 0f
-            panY = 0f
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .transformable(state = transformState, lockRotationOnZoomPan = true)
+            // Zoom + pan: only consumes multi-touch or single-touch when zoomed in.
+            // Single-touch at scale==1 is NOT consumed → pager receives horizontal swipes.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    var isMultiTouch = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.isEmpty()) break
+                        when {
+                            pressed.size >= 2 -> {
+                                isMultiTouch = true
+                                val newScale = (scale * event.calculateZoom()).coerceIn(1f, 5f)
+                                val panChange = event.calculatePan()
+                                if (newScale <= 1f) {
+                                    scale = 1f; panX = 0f; panY = 0f
+                                } else {
+                                    scale = newScale
+                                    panX += panChange.x
+                                    panY += panChange.y
+                                }
+                                event.changes.forEach { it.consume() }
+                            }
+                            isMultiTouch -> {
+                                // Consume stray events after multi-touch lifts
+                                event.changes.forEach { it.consume() }
+                            }
+                            pressed.size == 1 && scale > 1.05f -> {
+                                // Single-touch pan when zoomed — consume to block pager
+                                val c = pressed[0]
+                                panX += c.position.x - c.previousPosition.x
+                                panY += c.position.y - c.previousPosition.y
+                                c.consume()
+                            }
+                            // Single-touch at scale==1: don't consume → pager + vertical drag handle it
+                        }
+                    }
+                }
+            }
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onTap() })
             }

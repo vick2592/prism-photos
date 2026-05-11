@@ -10,8 +10,17 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -67,9 +76,24 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
         Screen.Trash.route,
     )
 
+    // Delay showing the nav bar so it doesn't flash over the viewer exit transition
+    var bottomBarVisible by remember { mutableStateOf(showBottomBar) }
+    LaunchedEffect(showBottomBar) {
+        if (showBottomBar) {
+            delay(220)
+            bottomBarVisible = true
+        } else {
+            bottomBarVisible = false
+        }
+    }
+
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
+            AnimatedVisibility(
+                visible = bottomBarVisible,
+                enter = fadeIn(animationSpec = tween(150)),
+                exit = fadeOut(animationSpec = tween(0)),
+            ) {
                 NavigationBar {
                     bottomNavItems.forEach { item ->
                         NavigationBarItem(
