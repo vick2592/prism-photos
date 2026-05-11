@@ -77,8 +77,9 @@ dependencies {
     // WorkManager (trash auto-purge)
     implementation(libs.work.runtime.ktx)
 
-    // Coil (image loading)
+    // Coil (image loading + video frame thumbnails)
     implementation(libs.coil.compose)
+    implementation(libs.coil.video)
 
     // Media3 ExoPlayer (video playback)
     implementation(libs.media3.exoplayer)

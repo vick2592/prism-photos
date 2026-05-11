@@ -6,7 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import dev.prism.gallery.data.model.MediaItem
 import kotlinx.coroutines.launch
 
@@ -82,9 +84,6 @@ fun ViewerScreen(
     val currentItem = state.items.getOrNull(pagerState.currentPage) ?: return
     val isFavorite = currentItem.id in state.favoriteIds
 
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
-    val dismissThreshold = 200f
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -92,6 +91,7 @@ fun ViewerScreen(
     ) {
         HorizontalPager(
             state = pagerState,
+            beyondBoundsPageCount = 1,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             val item = state.items[page]
@@ -103,16 +103,8 @@ fun ViewerScreen(
             } else {
                 ZoomableImage(
                     item = item,
-                    dragOffsetY = if (page == pagerState.currentPage) dragOffsetY else 0f,
                     onTap = { overlaysVisible = !overlaysVisible },
-                    onVerticalDrag = { delta ->
-                        dragOffsetY += delta
-                        if (dragOffsetY < 0f) dragOffsetY = 0f
-                    },
-                    onVerticalDragEnd = {
-                        if (dragOffsetY > dismissThreshold) onNavigateBack()
-                        else dragOffsetY = 0f
-                    },
+                    onDismiss = onNavigateBack,
                 )
             }
         }
@@ -203,29 +195,53 @@ fun ViewerScreen(
 @Composable
 private fun ZoomableImage(
     item: MediaItem,
-    dragOffsetY: Float,
     onTap: () -> Unit,
-    onVerticalDrag: (Float) -> Unit,
-    onVerticalDragEnd: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     var scale by remember { mutableFloatStateOf(1f) }
+    var panX by remember { mutableFloatStateOf(0f) }
+    var panY by remember { mutableFloatStateOf(0f) }
+    var dismissY by remember { mutableFloatStateOf(0f) }
+
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+        if (newScale > 1.05f) {
+            scale = newScale
+            panX += panChange.x
+            panY += panChange.y
+            dismissY = 0f
+        } else {
+            // Back to 1× — reset zoom/pan, track vertical swipe for dismiss
+            scale = 1f
+            panX = 0f
+            panY = 0f
+            dismissY = (dismissY + panChange.y).coerceAtLeast(0f)
+        }
+    }
+
+    // When gesture ends, decide: dismiss or spring back
+    LaunchedEffect(transformState.isTransformInProgress) {
+        if (!transformState.isTransformInProgress && scale <= 1.05f) {
+            if (dismissY > 250f) onDismiss() else dismissY = 0f
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
+            .transformable(state = transformState)
             .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragEnd = onVerticalDragEnd,
-                    onDragCancel = onVerticalDragEnd,
-                ) { _, dragAmount ->
-                    if (scale <= 1.05f) onVerticalDrag(dragAmount)
-                }
+                detectTapGestures(onTap = { onTap() })
             },
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
-            model = item.uri,
+            model = ImageRequest.Builder(context)
+                .data(item.uri)
+                .crossfade(300)
+                .memoryCacheKey(item.uri.toString())
+                .build(),
             contentDescription = item.displayName,
             contentScale = ContentScale.Fit,
             modifier = Modifier
@@ -233,8 +249,9 @@ private fun ZoomableImage(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    translationY = dragOffsetY
-                    alpha = (1f - dragOffsetY / 600f).coerceIn(0.3f, 1f)
+                    translationX = if (scale > 1f) panX else 0f
+                    translationY = if (scale > 1f) panY else dismissY
+                    alpha = if (scale <= 1f) (1f - dismissY / 600f).coerceIn(0.3f, 1f) else 1f
                 },
         )
     }

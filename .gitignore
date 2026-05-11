@@ -4,6 +4,7 @@
 /.idea
 .DS_Store
 /build
+app/build/
 /captures
 .externalNativeBuild
 .cxx
@@ -12,3 +13,4 @@
 google-services.json
 apk-resources/
 apk-source/
+*.hprof
