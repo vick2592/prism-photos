@@ -51,10 +51,14 @@ object EditHelper {
             val newName = "edited_${System.currentTimeMillis()}.$ext"
             val mimeType = if (ext == "png") "image/png" else "image/jpeg"
 
+            val now = System.currentTimeMillis()
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, newName)
                 put(MediaStore.Images.Media.MIME_TYPE, mimeType)
                 put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Prism")
+                put(MediaStore.Images.Media.DATE_TAKEN, now)
+                put(MediaStore.Images.Media.DATE_ADDED, now / 1000)
+                put(MediaStore.Images.Media.DATE_MODIFIED, now / 1000)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
@@ -73,6 +77,7 @@ object EditHelper {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 values.clear()
                 values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                values.put(MediaStore.Images.Media.DATE_TAKEN, now)
                 context.contentResolver.update(outputUri, values, null, null)
             }
 
