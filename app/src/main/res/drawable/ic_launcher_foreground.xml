@@ -4,67 +4,58 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Rainbow dispersion rays from prism base-right — drawn first so prism sits on top -->
-    <!-- Red -->
+    <!-- Rainbow dispersion rays — drawn first so prism body overlaps their origin -->
+    <!-- Red (bottom of fan, slightly below horizontal) -->
     <path
-        android:pathData="M66,72 L100,90 L98,90 L65,73 Z"
-        android:fillColor="#FF5252"
-        android:fillAlpha="0.85" />
+        android:pathData="M64,74 L88,80"
+        android:strokeColor="#E53935"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
     <!-- Orange -->
     <path
-        android:pathData="M66,72 L102,78 L100,79 L65,73 Z"
-        android:fillColor="#FF9100"
-        android:fillAlpha="0.85" />
+        android:pathData="M64,74 L88,73"
+        android:strokeColor="#FB8C00"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
     <!-- Yellow -->
     <path
-        android:pathData="M66,72 L101,66 L102,67 L65,73 Z"
-        android:fillColor="#FFD740"
-        android:fillAlpha="0.85" />
+        android:pathData="M64,74 L88,66"
+        android:strokeColor="#FDD835"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
     <!-- Green -->
     <path
-        android:pathData="M66,72 L98,56 L99,57 L65,73 Z"
-        android:fillColor="#69F0AE"
-        android:fillAlpha="0.85" />
+        android:pathData="M64,74 L87,58"
+        android:strokeColor="#43A047"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
     <!-- Blue -->
     <path
-        android:pathData="M66,72 L93,47 L94,48 L65,73 Z"
-        android:fillColor="#40C4FF"
-        android:fillAlpha="0.85" />
-    <!-- Violet -->
+        android:pathData="M64,74 L84,50"
+        android:strokeColor="#1E88E5"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- Violet (top of fan) -->
     <path
-        android:pathData="M66,72 L86,40 L87,41 L65,73 Z"
-        android:fillColor="#E040FB"
-        android:fillAlpha="0.85" />
-
-    <!-- Prism body: left face (darker) -->
-    <path
-        android:pathData="M42,20 L20,72 L66,72 Z"
-        android:fillColor="#9C64D0"
-        android:fillAlpha="0.6" />
-
-    <!-- Prism body: right face (lighter) -->
-    <path
-        android:pathData="M42,20 L66,72 L66,72 L42,20 Z"
-        android:fillColor="#D0BCFF"
-        android:fillAlpha="0.0" />
-
-    <!-- Prism outline -->
-    <path
-        android:pathData="M42,20 L20,72 L66,72 Z"
-        android:strokeColor="#E8DEF8"
-        android:strokeWidth="1.5"
+        android:pathData="M64,74 L80,43"
+        android:strokeColor="#8E24AA"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
         android:fillColor="#00000000" />
 
-    <!-- Bright highlight on left edge -->
+    <!-- Prism left face (deep purple) -->
     <path
-        android:pathData="M42,20 L20,72"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="1.2"
-        android:fillColor="#00000000"
-        android:strokeAlpha="0.6" />
+        android:pathData="M48,26 L24,74 L44,74 Z"
+        android:fillColor="#4527A0" />
 
-    <!-- White apex dot -->
+    <!-- Prism right face (medium purple — lighter for 3-D depth) -->
     <path
-        android:pathData="M42,18 A2.5,2.5 0 1,1 42,18.01 Z"
-        android:fillColor="#FFFFFF" />
+        android:pathData="M48,26 L44,74 L64,74 Z"
+        android:fillColor="#7E57C2" />
+
 </vector>
