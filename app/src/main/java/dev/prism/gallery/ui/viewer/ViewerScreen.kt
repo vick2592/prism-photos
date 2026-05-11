@@ -91,7 +91,7 @@ fun ViewerScreen(
     ) {
         HorizontalPager(
             state = pagerState,
-            beyondBoundsPageCount = 1,
+            beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             val item = state.items[page]
