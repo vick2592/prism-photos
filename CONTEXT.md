@@ -6,6 +6,8 @@
 
 The core philosophy: **your photos live on your device. Prism never touches the cloud.**
 
+> **Status (11 May 2026):** All planned phases complete. App is building and running on device. Currently in beta testing — debug APK being distributed to friends. Next milestone is signed release APK.
+
 ---
 
 ## App Identity
@@ -98,175 +100,206 @@ Decompiled from `com.sonyericsson.gallery_3.2.A.0.21` (minAPI 10, Android 2.3.3 
 
 ## Architecture
 
+**Pattern:** MVVM + Clean Architecture  
+**Package:** `dev.prism.gallery`
+
 ```
-dev.prism.gallery/
+app/src/main/java/dev/prism/gallery/
 ├── data/
 │   ├── local/
-│   │   ├── MediaStoreRepository.kt       # Queries MediaStore for images + videos
-│   │   ├── MediaContentObserver.kt       # ContentObserver for instant photo detection
-│   │   └── PrismDatabase.kt              # Room DB (favorites, trash)
+│   │   ├── dao/
+│   │   │   ├── FavoriteDao.kt
+│   │   │   └── TrashDao.kt
+│   │   ├── entity/
+│   │   │   ├── FavoriteEntity.kt
+│   │   │   └── TrashEntity.kt
+│   │   ├── MediaStoreRepository.kt       # MediaStore queries + ContentObserver (instant photo detection)
+│   │   └── PrismDatabase.kt              # Room DB v1 (favorites + trash tables)
 │   ├── model/
 │   │   └── MediaItem.kt                  # Unified image/video model
 │   └── preferences/
-│       └── UserPreferences.kt            # DataStore preferences
+│       └── PreferencesRepository.kt      # DataStore: grid_columns, slideshow_interval_secs
 ├── domain/
-│   ├── usecase/
-│   │   ├── GetGalleryUseCase.kt
-│   │   ├── GetAlbumsUseCase.kt
-│   │   ├── SearchMediaUseCase.kt
-│   │   ├── ToggleFavoriteUseCase.kt
-│   │   └── TrashMediaUseCase.kt
-│   └── model/
-│       └── Album.kt
+│   ├── model/
+│   │   └── Album.kt
+│   └── usecase/
+│       ├── GetAlbumsUseCase.kt
+│       ├── GetGalleryUseCase.kt
+│       └── TrashMediaUseCase.kt
 ├── ui/
-│   ├── gallery/
-│   │   ├── GalleryScreen.kt              # Main LazyVerticalGrid
-│   │   └── GalleryViewModel.kt
-│   ├── viewer/
-│   │   ├── ViewerScreen.kt               # HorizontalPager full-screen
-│   │   ├── ViewerViewModel.kt
-│   │   └── VideoPlayerScreen.kt          # Media3 ExoPlayer
 │   ├── albums/
-│   │   ├── AlbumsScreen.kt
+│   │   ├── AlbumDetailScreen.kt
+│   │   ├── AlbumDetailViewModel.kt       # bucketId: String from SavedStateHandle
+│   │   ├── AlbumsScreen.kt               # "Recently Deleted" tile + folder albums
 │   │   └── AlbumsViewModel.kt
+│   ├── components/
+│   │   ├── MediaGrid.kt                  # LazyVerticalGrid, accepts columns: Int param
+│   │   └── MediaThumbnail.kt             # Coil AsyncImage with video duration badge
+│   ├── gallery/
+│   │   ├── GalleryScreen.kt              # Date-grouped grid + slideshow FAB
+│   │   └── GalleryViewModel.kt           # Reads gridColumns from PreferencesRepository
 │   ├── search/
 │   │   ├── SearchScreen.kt
-│   │   └── SearchViewModel.kt
-│   ├── edit/
-│   │   └── EditScreen.kt                 # UCrop + brightness/contrast
+│   │   └── SearchViewModel.kt            # 250ms debounce, flatMapLatest
 │   ├── settings/
-│   │   └── SettingsScreen.kt
-│   ├── components/
-│   │   ├── MediaGrid.kt                  # Reusable grid composable
-│   │   ├── MediaThumbnail.kt             # Coil-backed image tile
-│   │   └── DateHeader.kt                 # Sticky date section header
-│   └── theme/
-│       ├── Theme.kt                      # Material 3 dynamic color
-│       ├── Color.kt
-│       └── Type.kt
-└── di/
-    ├── DatabaseModule.kt
-    ├── RepositoryModule.kt
-    └── AppModule.kt
+│   │   ├── SettingsScreen.kt             # FilterChip pickers for columns + interval
+│   │   └── SettingsViewModel.kt
+│   ├── slideshow/
+│   │   ├── SlideshowScreen.kt            # Fullscreen HorizontalPager, tap to pause
+│   │   └── SlideshowViewModel.kt
+│   ├── trash/
+│   │   ├── TrashScreen.kt                # 3-col grid, days-remaining badge, restore/delete
+│   │   └── TrashViewModel.kt
+│   └── viewer/
+│       ├── EditHelper.kt                 # UCrop intent builder + MediaStore save (with DATE_TAKEN)
+│       ├── ExifReader.kt                 # ExifInterface wrapper, reverse geocoding
+│       ├── VideoPlayerScreen.kt          # ExoPlayer, only active on current page
+│       ├── ViewerScreen.kt               # HorizontalPager, zoom/pan, swipe-to-dismiss
+│       └── ViewerViewModel.kt
+├── worker/
+│   └── TrashPurgeWorker.kt               # PeriodicWorkRequest, 1-day interval, purges >30 days
+├── NavGraph.kt                           # All routes + bottom bar AnimatedVisibility
+└── PrismApplication.kt                   # @HiltAndroidApp, ImageLoaderFactory, TrashPurgeWorker.schedule
 ```
 
 ---
 
-## Key Dependencies
+## Key Dependencies (actual versions in use)
 
-```kotlin
-// Image loading
-implementation("io.coil-kt:coil-compose:2.7.0")
-
-// Video playback
-implementation("androidx.media3:media3-exoplayer:1.4.0")
-implementation("androidx.media3:media3-ui:1.4.0")
-
-// Database (favorites, trash)
-implementation("androidx.room:room-runtime:2.6.1")
-ksp("androidx.room:room-compiler:2.6.1")
-implementation("androidx.room:room-ktx:2.6.1")
-
-// Dependency injection
-implementation("com.google.dagger:hilt-android:2.51")
-ksp("com.google.dagger:hilt-compiler:2.51")
-
-// Settings persistence
-implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-// EXIF data (location, date, orientation)
-implementation("androidx.exifinterface:exifinterface:1.3.7")
-
-// Background work (trash auto-purge)
-implementation("androidx.work:work-runtime-ktx:2.9.0")
-
-// Image editing (crop, rotate)
-implementation("com.github.yalantis:ucrop:2.2.8")
-
-// Compose BOM
-implementation(platform("androidx.compose:compose-bom:2024.06.00"))
-implementation("androidx.compose.ui:ui")
-implementation("androidx.compose.material3:material3")
-implementation("androidx.compose.foundation:foundation")  // HorizontalPager, LazyVerticalGrid
-```
+| Library | Version |
+|---------|---------|
+| Kotlin | 2.0.21 |
+| Jetpack Compose BOM | 2024.12.01 |
+| AGP | 8.9.0 |
+| KSP | 2.0.21-1.0.28 |
+| Hilt | 2.52 |
+| Navigation Compose | 2.8.5 |
+| Coil | 2.7.0 (+ coil-video) |
+| Media3 ExoPlayer | 1.4.1 |
+| Room | 2.6.1 |
+| DataStore Preferences | 1.1.1 |
+| WorkManager | 2.9.1 |
+| ExifInterface | 1.3.7 |
+| UCrop | 2.2.8 |
+| Gradle | 8.11.1 |
 
 ---
 
-## ContentObserver Strategy (Instant Photo Detection)
+## App Identity
 
-This is the most critical feature differentiating Prism from Google Photos:
-
-```kotlin
-// MediaContentObserver.kt — registered in the app's lifecycle
-class MediaContentObserver(handler: Handler) : ContentObserver(handler) {
-    override fun onChange(selfChange: Boolean, uri: Uri?) {
-        // Notify MediaStoreRepository to re-query
-        // This fires within ~1 second of Camera saving a photo
-    }
-}
-
-// Register on both URIs:
-contentResolver.registerContentObserver(
-    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer
-)
-contentResolver.registerContentObserver(
-    MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, observer
-)
-```
+| Field | Value |
+|-------|-------|
+| App name | Prism |
+| Package name | `dev.prism.gallery` |
+| Min SDK | 26 (Android 8.0) |
+| Target SDK | 35 (Android 15) |
+| Language | Kotlin |
+| UI toolkit | Jetpack Compose (no XML layouts) |
+| Architecture | MVVM + Clean Architecture (data / domain / ui) |
+| DI | Hilt 2.52 + KSP |
+| GitHub | https://github.com/vick2592/prism-photos |
 
 ---
 
-## Permissions (Android 13+ / API 33+)
+## Target Device
+
+**Sony Xperia 1V** running **Android 15 (API 35)**. All permissions, media APIs, and features validated against Android 13+ media permission model (`READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`) and Android 15 behaviour changes.
+
+- ADB path: `~/Library/Android/sdk/platform-tools/adb`
+- Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk`
+
+---
+
+## Why We're Building This
+
+Google Photos on Android 15 has two critical pain points this user experiences daily:
+1. **Constant cloud backup pressure** — repeated prompts and UI nudges to back up to Google cloud
+2. **Delayed photo display** — newly captured photos from the Camera app are not immediately visible in Google Photos when both apps are open
+
+Prism solves both:
+- Zero cloud, zero accounts, zero backup prompts — ever
+- Instant photo detection via `ContentObserver` registered on both `MediaStore.Images.Media.EXTERNAL_CONTENT_URI` and `MediaStore.Video.Media.EXTERNAL_CONTENT_URI` — grid updates within seconds of the Camera app saving a file
+
+---
+
+## Permissions
 
 ```xml
-<!-- Images -->
 <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-<!-- Videos -->
 <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-<!-- Required for trash / manage media on Android 11+ -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 <uses-permission android:name="android.permission.MANAGE_MEDIA" />
-<!-- Writing edited photos back to MediaStore -->
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-    android:maxSdkVersion="28" />
-<!-- Wallpaper -->
 <uses-permission android:name="android.permission.SET_WALLPAPER" />
-<!-- Location (EXIF display only, never transmitted) -->
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 ```
+
+UCropActivity is declared in the manifest.
 
 ---
 
-## Feature Roadmap
+## Feature Status
 
-### Phase 1 — Project Scaffolding
-Android Studio project setup, Gradle dependencies, package structure, theme.
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Gallery grid (date-grouped) | ✅ Done | |
+| Configurable columns (2/3/4) | ✅ Done | DataStore persisted |
+| Viewer (swipe, zoom, dismiss) | ✅ Done | Custom awaitEachGesture, zoom up to 5× |
+| Video playback | ✅ Done | ExoPlayer, controls, only active on current page |
+| Video thumbnails in grid | ✅ Done | Coil VideoFrameDecoder |
+| EXIF info sheet | ✅ Done | Date, size, resolution, GPS + reverse geocode |
+| Favorites | ✅ Done | Room FavoriteEntity, heart icon |
+| Share | ✅ Done | System share intent |
+| Albums (folder-based) | ✅ Done | BUCKET_ID grouping, includes "Recently Deleted" tile |
+| Album detail | ✅ Done | |
+| Live search | ✅ Done | 250ms debounce |
+| Trash (30-day soft-delete) | ✅ Done | Days-remaining badge, restore, permanent delete |
+| Trash auto-purge | ✅ Done | WorkManager PeriodicWorkRequest, 1-day interval |
+| Image crop/rotate (UCrop) | ✅ Done | Saves to DCIM/Prism/, DATE_TAKEN set correctly |
+| Slideshow | ✅ Done | Fullscreen HorizontalPager, configurable interval |
+| Settings screen | ✅ Done | Grid columns + slideshow interval |
+| Material You dynamic color | ✅ Done | Monet on API 32+, purple fallback |
+| App icon | ✅ Done | White bg, two-tone purple prism, rainbow rays |
+| Bottom nav flash fix | ✅ Done | AnimatedVisibility with 220ms delay |
+| `ACTION_VIEW` intent filters | ⬜ Roadmap | Allows Prism to appear in "Open with" |
+| Wallpaper setter | ⬜ Roadmap | |
+| Sort options | ⬜ Roadmap | Date ascending, size, name |
+| Bulk select | ⬜ Roadmap | Multi-select delete/share |
+| Signed release APK | ⬜ Next | After beta testing complete |
 
-### Phase 2 — Core Gallery
-MediaStore query, ContentObserver, `LazyVerticalGrid`, date headers, permission flow.
+---
 
-### Phase 3 — Photo & Video Viewer
-`HorizontalPager`, pinch-to-zoom (`Modifier.transformable`), Media3 ExoPlayer, action bar (share, favorite, trash, info).
+## Known Bug Fixes Applied
 
-### Phase 4 — Albums & Organization
-Albums by `BUCKET_DISPLAY_NAME`, Favorites (Room), Trash with 30-day WorkManager purge.
+| Bug | Fix | Commit |
+|-----|-----|--------|
+| Bottom nav bar flashing when closing viewer | `AnimatedVisibility` + 220ms delay on show | `cb1a1a9` |
+| Horizontal pager swipe broken when zoomed | Custom `awaitEachGesture` — only consumes touch when scale > 1 | `cb1a1a9` |
+| Video on adjacent pages blocked swipe | Adjacent pages show static `AsyncImage` thumbnail, not live player | `cb1a1a9` |
+| UCrop `currentItem` unresolved in launcher callback | `editingDisplayName` state var captured at tap time | `920bf41` |
+| Cropped photo not appearing in gallery | `DATE_TAKEN`, `DATE_ADDED`, `DATE_MODIFIED` now written to MediaStore on save | `bbcba1a` |
+| `bucketId` type mismatch (Long vs String) | `Album.id` and `MediaItem.bucketId` are `String` | `9251de5` |
 
-### Phase 5 — Search
-Date range picker, EXIF location search, reverse geocoding.
+---
 
-### Phase 6 — Basic Editing
-UCrop (crop/rotate), brightness/contrast via `ColorMatrix`, save copy to `Pictures/Prism/`.
+## Reference APK: Sony Ericsson Gallery v3.2.A.0.21
 
-### Phase 7 — Advanced Polish
-Slideshow, Material 3 dynamic theming, settings screen, onboarding, face grouping (ML Kit stretch goal).
+Decompiled from `com.sonyericsson.gallery_3.2.A.0.21` (minAPI 10, Android 2.3.3 era).
 
-### Phase 8 — Deploy & Test
-`adb install`, full device testing on Xperia 1V / Android 15.
+### Key Observations
+
+- The Sony gallery used a **3D OpenGL grid renderer** (`RenderView`, `GridLayer`, `GridCamera`) — visually impressive for 2011 but replaced by Compose `LazyVerticalGrid` with Coil.
+- `GalleryApplication` generated a **unique device ID from IMEI hash** for telemetry — Prism has zero telemetry.
+- `BootReceiver` listened to `MEDIA_MOUNTED` / `MEDIA_UNMOUNTED` — Prism uses `ContentObserver` which is more granular.
+- `BitmapManager` and `DiskCache` handled manual thumbnail caching — Coil handles this automatically.
+- Facebook/Renren/Picasa integrations dropped — no cloud, no social.
+- DLNA casting, NFC Handover, Sony Illumination API, IDD probes — all dropped (Sony private APIs or out of scope).
 
 ---
 
 ## Development Notes
 
-- **ADB path**: `~/Library/Android/sdk/platform-tools/adb`
-- **Test device**: Sony Xperia 1V, Android 15, model QV7706YMJA
-- **APK reference files**: `../apk-resources/` (apktool) and `../apk-source/` (jadx) — relative to this repo
-- All commits follow conventional commits format: `feat:`, `fix:`, `chore:`, `refactor:`
+- All commits follow conventional commits: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`
+- JVM heap set to 2048MB in `gradle.properties`
+- `gradlew` not committed — use Android Studio Build menu or `./gradlew` from the project root after first sync
+- ProGuard/R8 enabled (`isMinifyEnabled = true`) for release builds
+

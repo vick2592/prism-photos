@@ -147,13 +147,29 @@ Prism is 100% local. It:
 
 ---
 
+## Bug Fixes
+
+| Bug | Fix |
+|-----|-----|
+| Bottom nav bar flashing when closing viewer | `AnimatedVisibility` + 220ms show delay |
+| Horizontal swipe broken when zoomed in | Custom `awaitEachGesture` — only intercepts touch when `scale > 1` |
+| Video on adjacent pages blocking swipe | Adjacent pages render a static thumbnail instead of live `ExoPlayer` |
+| UCrop result callback referencing stale item | `editingDisplayName` state var captured at tap time |
+| Cropped photo not appearing in gallery | `DATE_TAKEN`, `DATE_ADDED`, `DATE_MODIFIED` now written to MediaStore on save |
+| `bucketId` type mismatch in navigation | `Album.id` and `MediaItem.bucketId` correctly typed as `String` |
+
+---
+
 ## Roadmap
 
-- [ ] Signed release APK / Play Store listing
-- [ ] Set as default viewer via `ACTION_VIEW` intent filters
+- [x] All core gallery features
+- [x] Debug APK — beta testing in progress
+- [ ] Signed release APK
+- [ ] `ACTION_VIEW` intent filters (appear in "Open with" chooser)
 - [ ] Wallpaper setter
 - [ ] Sort options (date ascending, size, name)
 - [ ] Bulk select and delete / share
+- [ ] Create album folder from within the app
 
 ---
 
