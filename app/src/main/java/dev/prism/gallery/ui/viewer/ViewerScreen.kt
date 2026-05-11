@@ -117,11 +117,12 @@ fun ViewerScreen(
                         EditHelper.saveToMediaStore(context, outputUri, displayName)
                     }
                     EditHelper.cleanupCacheFile(outputUri)
-                    Toast.makeText(
-                        context,
-                        if (saved != null) "Saved to gallery" else "Save failed",
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                    if (saved != null) {
+                        viewModel.refreshMedia()
+                        Toast.makeText(context, "Saved to gallery", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Save failed", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }

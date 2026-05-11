@@ -12,6 +12,7 @@ import dev.prism.gallery.data.model.MediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -22,10 +23,17 @@ import javax.inject.Singleton
 class MediaStoreRepository @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    // Allows any component to force an immediate re-query independent of the ContentObserver.
+    private val _manualRefresh = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    fun refresh() {
+        _manualRefresh.tryEmit(Unit)
+    }
+
     /**
      * Returns a [Flow] that emits the full media list immediately, then re-emits
-     * whenever the Camera (or any app) saves a new photo or video to MediaStore.
-     * This is the core mechanism that gives Prism instant photo detection.
+     * whenever the Camera (or any app) saves a new photo or video to MediaStore,
+     * or when [refresh] is called explicitly.
      */
     fun observeMedia(): Flow<List<MediaItem>> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -39,6 +47,10 @@ class MediaStoreRepository @Inject constructor(
         context.contentResolver.registerContentObserver(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, observer
         )
+        // Manual refresh trigger (e.g. after UCrop save)
+        launch {
+            _manualRefresh.collect { send(queryAllMedia()) }
+        }
         // Emit initial value immediately
         send(queryAllMedia())
         awaitClose {

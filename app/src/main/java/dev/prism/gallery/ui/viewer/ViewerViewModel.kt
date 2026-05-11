@@ -65,4 +65,8 @@ class ViewerViewModel @Inject constructor(
     fun trashItem(item: MediaItem) {
         viewModelScope.launch { trashMediaUseCase(item) }
     }
+
+    fun refreshMedia() {
+        repository.refresh()
+    }
 }
