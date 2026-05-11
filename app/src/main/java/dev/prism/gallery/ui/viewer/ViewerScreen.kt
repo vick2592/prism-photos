@@ -4,10 +4,16 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import kotlin.math.abs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -94,18 +100,31 @@ fun ViewerScreen(
             beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
+            val pageOffset = abs((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+            val fraction = 1f - pageOffset.coerceIn(0f, 1f)
             val item = state.items[page]
-            if (item.isVideo) {
-                VideoPlayerScreen(
-                    uri = item.uri,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                ZoomableImage(
-                    item = item,
-                    onTap = { overlaysVisible = !overlaysVisible },
-                    onDismiss = onNavigateBack,
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val s = 0.90f + 0.10f * fraction
+                        scaleX = s
+                        scaleY = s
+                        alpha = 0.5f + 0.5f * fraction
+                    },
+            ) {
+                if (item.isVideo) {
+                    VideoPlayerScreen(
+                        uri = item.uri,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    ZoomableImage(
+                        item = item,
+                        onTap = { overlaysVisible = !overlaysVisible },
+                        onDismiss = onNavigateBack,
+                    )
+                }
             }
         }
 
@@ -199,40 +218,70 @@ private fun ZoomableImage(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var scale by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
-    var dismissY by remember { mutableFloatStateOf(0f) }
+    val dismissOffset = remember { Animatable(0f) }
 
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         val newScale = (scale * zoomChange).coerceIn(1f, 5f)
-        if (newScale > 1.05f) {
-            scale = newScale
+        scale = newScale
+        if (scale > 1.05f) {
             panX += panChange.x
             panY += panChange.y
-            dismissY = 0f
         } else {
-            // Back to 1× — reset zoom/pan, track vertical swipe for dismiss
             scale = 1f
             panX = 0f
             panY = 0f
-            dismissY = (dismissY + panChange.y).coerceAtLeast(0f)
-        }
-    }
-
-    // When gesture ends, decide: dismiss or spring back
-    LaunchedEffect(transformState.isTransformInProgress) {
-        if (!transformState.isTransformInProgress && scale <= 1.05f) {
-            if (dismissY > 250f) onDismiss() else dismissY = 0f
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .transformable(state = transformState)
+            .transformable(state = transformState, lockRotationOnZoomPan = true)
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onTap() })
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (dismissOffset.value > 200f) {
+                                // Fly off screen then navigate back
+                                dismissOffset.animateTo(
+                                    targetValue = 1400f,
+                                    animationSpec = tween(durationMillis = 220),
+                                )
+                                onDismiss()
+                            } else {
+                                // Spring back into place
+                                dismissOffset.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                )
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch {
+                            dismissOffset.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                            )
+                        }
+                    },
+                ) { _, dragAmount ->
+                    if (scale <= 1.05f && dragAmount > 0f) {
+                        scope.launch {
+                            dismissOffset.snapTo((dismissOffset.value + dragAmount).coerceAtLeast(0f))
+                        }
+                    }
+                }
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -250,8 +299,8 @@ private fun ZoomableImage(
                     scaleX = scale
                     scaleY = scale
                     translationX = if (scale > 1f) panX else 0f
-                    translationY = if (scale > 1f) panY else dismissY
-                    alpha = if (scale <= 1f) (1f - dismissY / 600f).coerceIn(0.3f, 1f) else 1f
+                    translationY = if (scale > 1f) panY else dismissOffset.value
+                    alpha = if (scale <= 1f) (1f - dismissOffset.value / 800f).coerceIn(0.2f, 1f) else 1f
                 },
         )
     }
