@@ -164,6 +164,7 @@ Prism is 100% local. It:
 
 - [x] All core gallery features
 - [x] Debug APK — beta testing in progress
+- [ ] **Investigate:** Photos saved to `DCIM/Prism/` (cropped edits) appear in the Prism album but not in the main gallery grid — requires deeper investigation into why `DCIM/Prism` is excluded from the all-media query
 - [ ] Signed release APK
 - [ ] `ACTION_VIEW` intent filters (appear in "Open with" chooser)
 - [ ] Wallpaper setter

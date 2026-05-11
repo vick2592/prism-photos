@@ -278,6 +278,18 @@ UCropActivity is declared in the manifest.
 | UCrop `currentItem` unresolved in launcher callback | `editingDisplayName` state var captured at tap time | `920bf41` |
 | Cropped photo not appearing in gallery | `DATE_TAKEN`, `DATE_ADDED`, `DATE_MODIFIED` now written to MediaStore on save | `bbcba1a` |
 | `bucketId` type mismatch (Long vs String) | `Album.id` and `MediaItem.bucketId` are `String` | `9251de5` |
+| Gallery not refreshing after crop save | `MutableSharedFlow` manual refresh trigger in `MediaStoreRepository`; `refreshMedia()` called after save | `adb5b8c` |
+| Search bar + UCrop toolbar behind status bar on Android 15 | `statusBarsPadding()` on SearchScreen column; `windowOptOutEdgeToEdgeEnforcement` on UCropActivity theme | `15b4451` |
+| Swipe-to-dismiss 1-second delay | `onNavigateBack()` called immediately at threshold (not after animation); fly-off reduced 220ms → 120ms; bottom bar delay 220ms → 80ms | `482c103` |
+| Crop save not indexed by MediaStore | `MediaScannerConnection.scanFile()` called after `IS_PENDING=0` update | `482c103` |
+
+---
+
+## Known Open Issues (Roadmap)
+
+| Issue | Notes |
+|-------|-------|
+| `DCIM/Prism` photos not appearing in main gallery grid | Cropped edits are visible in the **Prism album** but absent from the all-media gallery grid. Likely a MediaStore query filter or `IS_PENDING` timing issue specific to this path. Needs investigation. |
 
 ---
 
