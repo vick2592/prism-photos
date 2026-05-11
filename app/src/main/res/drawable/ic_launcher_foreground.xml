@@ -3,12 +3,68 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Prism logo: simple geometric prism / triangle shape -->
+
+    <!-- Rainbow dispersion rays from prism base-right — drawn first so prism sits on top -->
+    <!-- Red -->
     <path
-        android:fillColor="#6650A4"
-        android:pathData="M54,18 L90,78 L18,78 Z" />
+        android:pathData="M66,72 L100,90 L98,90 L65,73 Z"
+        android:fillColor="#FF5252"
+        android:fillAlpha="0.85" />
+    <!-- Orange -->
     <path
+        android:pathData="M66,72 L102,78 L100,79 L65,73 Z"
+        android:fillColor="#FF9100"
+        android:fillAlpha="0.85" />
+    <!-- Yellow -->
+    <path
+        android:pathData="M66,72 L101,66 L102,67 L65,73 Z"
+        android:fillColor="#FFD740"
+        android:fillAlpha="0.85" />
+    <!-- Green -->
+    <path
+        android:pathData="M66,72 L98,56 L99,57 L65,73 Z"
+        android:fillColor="#69F0AE"
+        android:fillAlpha="0.85" />
+    <!-- Blue -->
+    <path
+        android:pathData="M66,72 L93,47 L94,48 L65,73 Z"
+        android:fillColor="#40C4FF"
+        android:fillAlpha="0.85" />
+    <!-- Violet -->
+    <path
+        android:pathData="M66,72 L86,40 L87,41 L65,73 Z"
+        android:fillColor="#E040FB"
+        android:fillAlpha="0.85" />
+
+    <!-- Prism body: left face (darker) -->
+    <path
+        android:pathData="M42,20 L20,72 L66,72 Z"
+        android:fillColor="#9C64D0"
+        android:fillAlpha="0.6" />
+
+    <!-- Prism body: right face (lighter) -->
+    <path
+        android:pathData="M42,20 L66,72 L66,72 L42,20 Z"
         android:fillColor="#D0BCFF"
-        android:pathData="M54,18 L54,78 L18,78 Z"
-        android:fillAlpha="0.5" />
+        android:fillAlpha="0.0" />
+
+    <!-- Prism outline -->
+    <path
+        android:pathData="M42,20 L20,72 L66,72 Z"
+        android:strokeColor="#E8DEF8"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000" />
+
+    <!-- Bright highlight on left edge -->
+    <path
+        android:pathData="M42,20 L20,72"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.2"
+        android:fillColor="#00000000"
+        android:strokeAlpha="0.6" />
+
+    <!-- White apex dot -->
+    <path
+        android:pathData="M42,18 A2.5,2.5 0 1,1 42,18.01 Z"
+        android:fillColor="#FFFFFF" />
 </vector>
