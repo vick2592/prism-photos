@@ -1,6 +1,10 @@
 package dev.prism.gallery.ui.viewer
 
+import android.app.Activity
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +33,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
@@ -60,8 +65,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.yalantis.ucrop.UCrop
 import dev.prism.gallery.data.model.MediaItem
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +99,28 @@ fun ViewerScreen(
     var showTrashDialog by remember { mutableStateOf(false) }
     var currentExif by remember { mutableStateOf(MediaExif()) }
     val infoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+
+    // UCrop result launcher
+    val editLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val outputUri = UCrop.getOutput(result.data!!)
+            if (outputUri != null) {
+                scope.launch {
+                    val saved = withContext(Dispatchers.IO) {
+                        EditHelper.saveToMediaStore(context, outputUri, currentItem.displayName)
+                    }
+                    EditHelper.cleanupCacheFile(outputUri)
+                    Toast.makeText(
+                        context,
+                        if (saved != null) "Saved to gallery" else "Save failed",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }
+    }
 
     val currentItem = state.items.getOrNull(pagerState.currentPage) ?: return
     val isFavorite = currentItem.id in state.favoriteIds
@@ -193,6 +223,18 @@ fun ViewerScreen(
                         tint = if (isFavorite) Color(0xFFE91E63) else Color.White,
                         modifier = Modifier.size(28.dp),
                     )
+                }
+                if (!currentItem.isVideo) {
+                    IconButton(onClick = {
+                        val intent = EditHelper.buildCropIntent(
+                            context = context,
+                            sourceUri = currentItem.uri,
+                            displayName = currentItem.displayName,
+                        )
+                        editLauncher.launch(intent)
+                    }) {
+                        Icon(Icons.Filled.Edit, "Edit", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
                 }
                 IconButton(onClick = {
                     scope.launch {

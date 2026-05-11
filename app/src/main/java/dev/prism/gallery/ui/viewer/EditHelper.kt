@@ -1,0 +1,89 @@
+package dev.prism.gallery.ui.viewer
+
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import com.yalantis.ucrop.UCrop
+import java.io.File
+
+object EditHelper {
+
+    /**
+     * Builds a UCrop Intent from a MediaStore source URI.
+     * The destination is a temporary file in the app's cache directory.
+     */
+    fun buildCropIntent(context: Context, sourceUri: Uri, displayName: String): Intent {
+        val ext = displayName.substringAfterLast('.', "jpg").lowercase()
+        val destFile = File(context.cacheDir, "prism_edit_${System.currentTimeMillis()}.$ext")
+
+        val options = UCrop.Options().apply {
+            setCompressionQuality(95)
+            setFreeStyleCropEnabled(true)
+            setShowCropGrid(true)
+            setShowCropFrame(true)
+            // Dark toolbar to match the black viewer background
+            setToolbarColor(0xFF000000.toInt())
+            setStatusBarColor(0xFF000000.toInt())
+            setToolbarWidgetColor(0xFFFFFFFF.toInt())
+            setActiveControlsWidgetColor(0xFF9C27B0.toInt())
+            setToolbarTitle("Edit")
+        }
+
+        return UCrop.of(sourceUri, Uri.fromFile(destFile))
+            .withOptions(options)
+            .getIntent(context)
+    }
+
+    /**
+     * Copies the UCrop output file into MediaStore (DCIM/Prism/).
+     * Returns the new MediaStore URI on success, null on failure.
+     */
+    suspend fun saveToMediaStore(
+        context: Context,
+        editedUri: Uri,
+        originalDisplayName: String,
+    ): Uri? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val ext = originalDisplayName.substringAfterLast('.', "jpg").lowercase()
+            val newName = "edited_${System.currentTimeMillis()}.$ext"
+            val mimeType = if (ext == "png") "image/png" else "image/jpeg"
+
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, newName)
+                put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Prism")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+            }
+
+            val outputUri = context.contentResolver.insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+            ) ?: return@withContext null
+
+            context.contentResolver.openInputStream(editedUri)?.use { input ->
+                context.contentResolver.openOutputStream(outputUri)?.use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                context.contentResolver.update(outputUri, values, null, null)
+            }
+
+            outputUri
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Deletes the temporary cache file produced by UCrop. */
+    fun cleanupCacheFile(uri: Uri) {
+        uri.path?.let { File(it).delete() }
+    }
+}
