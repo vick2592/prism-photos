@@ -21,10 +21,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.prism.gallery.ui.albums.AlbumDetailScreen
 import dev.prism.gallery.ui.albums.AlbumsScreen
 import dev.prism.gallery.ui.gallery.GalleryScreen
 import dev.prism.gallery.ui.search.SearchScreen
 import dev.prism.gallery.ui.settings.SettingsScreen
+import dev.prism.gallery.ui.trash.TrashScreen
 import dev.prism.gallery.ui.viewer.ViewerScreen
 
 sealed class Screen(val route: String) {
@@ -35,6 +37,11 @@ sealed class Screen(val route: String) {
     data object Viewer : Screen("viewer/{mediaId}") {
         fun createRoute(mediaId: Long) = "viewer/$mediaId"
     }
+    data object AlbumDetail : Screen("album_detail/{bucketId}/{albumName}") {
+        fun createRoute(bucketId: Long, albumName: String) =
+            "album_detail/$bucketId/${android.net.Uri.encode(albumName)}"
+    }
+    data object Trash : Screen("trash")
 }
 
 data class BottomNavItem(
@@ -54,7 +61,11 @@ private val bottomNavItems = listOf(
 fun PrismApp(navController: NavHostController = rememberNavController()) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val showBottomBar = currentRoute != Screen.Viewer.route
+    val showBottomBar = currentRoute !in listOf(
+        Screen.Viewer.route,
+        Screen.AlbumDetail.route,
+        Screen.Trash.route,
+    )
 
     Scaffold(
         bottomBar = {
@@ -93,7 +104,13 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
                 )
             }
             composable(Screen.Albums.route) {
-                AlbumsScreen(contentPadding = paddingValues)
+                AlbumsScreen(
+                    contentPadding = paddingValues,
+                    onAlbumClick = { bucketId, albumName ->
+                        navController.navigate(Screen.AlbumDetail.createRoute(bucketId, albumName))
+                    },
+                    onTrashClick = { navController.navigate(Screen.Trash.route) },
+                )
             }
             composable(Screen.Search.route) {
                 SearchScreen(
@@ -115,6 +132,28 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
                     mediaId = mediaId,
                     onNavigateBack = { navController.navigateUp() },
                 )
+            }
+            composable(
+                route = Screen.AlbumDetail.route,
+                arguments = listOf(
+                    navArgument("bucketId") { type = NavType.LongType },
+                    navArgument("albumName") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val bucketId = backStackEntry.arguments?.getLong("bucketId") ?: 0L
+                val albumName = android.net.Uri.decode(
+                    backStackEntry.arguments?.getString("albumName") ?: ""
+                )
+                AlbumDetailScreen(
+                    albumName = albumName,
+                    onMediaClick = { mediaId ->
+                        navController.navigate(Screen.Viewer.createRoute(mediaId))
+                    },
+                    onNavigateBack = { navController.navigateUp() },
+                )
+            }
+            composable(Screen.Trash.route) {
+                TrashScreen(onNavigateBack = { navController.navigateUp() })
             }
         }
     }

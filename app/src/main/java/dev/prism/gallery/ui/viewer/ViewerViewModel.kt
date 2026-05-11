@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.prism.gallery.data.local.MediaStoreRepository
 import dev.prism.gallery.data.local.dao.FavoriteDao
+import dev.prism.gallery.data.local.dao.TrashDao
 import dev.prism.gallery.data.local.entity.FavoriteEntity
 import dev.prism.gallery.data.model.MediaItem
+import dev.prism.gallery.domain.usecase.TrashMediaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,8 @@ data class ViewerState(
 class ViewerViewModel @Inject constructor(
     private val repository: MediaStoreRepository,
     private val favoriteDao: FavoriteDao,
+    private val trashDao: TrashDao,
+    private val trashMediaUseCase: TrashMediaUseCase,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ViewerState())
@@ -34,10 +38,13 @@ class ViewerViewModel @Inject constructor(
             combine(
                 repository.observeMedia(),
                 favoriteDao.observeFavorites(),
-            ) { items, favorites ->
-                val index = items.indexOfFirst { it.id == mediaId }.coerceAtLeast(0)
+                trashDao.observeTrash(),
+            ) { items, favorites, trashed ->
+                val trashedIds = trashed.map { it.mediaId }.toSet()
+                val filtered = items.filter { it.id !in trashedIds }
+                val index = filtered.indexOfFirst { it.id == mediaId }.coerceAtLeast(0)
                 ViewerState(
-                    items = items,
+                    items = filtered,
                     startIndex = index,
                     favoriteIds = favorites.map { it.mediaId }.toSet(),
                 )
@@ -53,5 +60,9 @@ class ViewerViewModel @Inject constructor(
                 favoriteDao.addFavorite(FavoriteEntity(mediaId = mediaId))
             }
         }
+    }
+
+    fun trashItem(item: MediaItem) {
+        viewModelScope.launch { trashMediaUseCase(item) }
     }
 }

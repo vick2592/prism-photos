@@ -32,9 +32,12 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,6 +87,7 @@ fun ViewerScreen(
 
     var overlaysVisible by remember { mutableStateOf(true) }
     var showInfoSheet by remember { mutableStateOf(false) }
+    var showTrashDialog by remember { mutableStateOf(false) }
     var currentExif by remember { mutableStateOf(MediaExif()) }
     val infoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
@@ -194,7 +198,7 @@ fun ViewerScreen(
                 }) {
                     Icon(Icons.Filled.Info, "Info", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
-                IconButton(onClick = { /* Phase 4: trash */ }) {
+                IconButton(onClick = { showTrashDialog = true }) {
                     Icon(Icons.Filled.Delete, "Delete", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
             }
@@ -207,6 +211,24 @@ fun ViewerScreen(
             displayName = currentItem.displayName,
             sheetState = infoSheetState,
             onDismiss = { showInfoSheet = false },
+        )
+    }
+
+    if (showTrashDialog) {
+        AlertDialog(
+            onDismissRequest = { showTrashDialog = false },
+            title = { Text("Move to trash?") },
+            text = { Text("\"${currentItem.displayName}\" will be permanently deleted after 30 days.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.trashItem(currentItem)
+                    showTrashDialog = false
+                    onNavigateBack()
+                }) { Text("Move to Trash") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrashDialog = false }) { Text("Cancel") }
+            },
         )
     }
 }
