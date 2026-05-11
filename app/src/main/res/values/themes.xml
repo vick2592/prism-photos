@@ -1,3 +1,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.Prism" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- UCrop activity theme: opts out of Android 15 forced edge-to-edge so the
+         toolbar + checkmark are not drawn behind the status bar. -->
+    <style name="Theme.Prism.UCrop" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:ignore="NewApi">true</item>
+    </style>
 </resources>
