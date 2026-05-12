@@ -159,9 +159,6 @@ class MediaStoreRepository @Inject constructor(
                     relativePath = relativePath,
                     duration = duration,
                 )
-                    bucketName = cursor.getString(bucketNameCol) ?: "Unknown",
-                    duration = duration,
-                )
             }
         }
         return items

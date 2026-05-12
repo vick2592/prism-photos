@@ -37,9 +37,9 @@ class ViewerViewModel @Inject constructor(
 
     /**
      * Filter context passed from the screen that launched the viewer:
-     *  - "gallery"       → only DCIM/* + user-selected extra buckets (matches gallery grid)
-     *  - "bucket:{id}"   → only that specific album bucket
-     *  - "all"           → no filter beyond trash exclusion (search, favorites)
+     *  - "gallery"      -> only DCIM/ + user-selected extra buckets (matches gallery grid)
+     *  - "bucket:{id}"  -> only that specific album bucket
+     *  - "all"          -> no filter beyond trash exclusion (search, favorites)
      */
     private val filter: String = savedStateHandle.get<String>("filter") ?: "all"
 
