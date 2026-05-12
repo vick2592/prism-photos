@@ -2,6 +2,7 @@ package dev.prism.gallery.ui.viewer
 
 import android.app.WallpaperManager
 import android.app.Activity
+import android.content.ContentUris
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -117,6 +118,18 @@ fun ViewerScreen(
     var editingSourceUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var editingDateTaken by remember { mutableStateOf(0L) }
 
+    // After a crop saves, hold the new MediaStore ID here until the updated items list
+    // arrives so we can scroll the pager to the crop's actual position.
+    var pendingScrollToId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(state.items, pendingScrollToId) {
+        val targetId = pendingScrollToId ?: return@LaunchedEffect
+        val idx = state.items.indexOfFirst { it.id == targetId }
+        if (idx >= 0) {
+            pagerState.scrollToPage(idx)
+            pendingScrollToId = null
+        }
+    }
+
     // Reset zoom-in flag when the user swipes to a new page.
     LaunchedEffect(pagerState.currentPage) { isZoomedIn = false }
 
@@ -136,6 +149,10 @@ fun ViewerScreen(
                     } else null
                     EditHelper.cleanupCacheFile(outputUri)
                     if (saved != null) {
+                        // Parse the new item's MediaStore ID from the returned URI and
+                        // queue a pager scroll to it. The LaunchedEffect above fires when
+                        // the reactive list update arrives and finds the crop in the list.
+                        pendingScrollToId = ContentUris.parseId(saved)
                         viewModel.refreshMedia()
                         Toast.makeText(context, "Saved to gallery", Toast.LENGTH_SHORT).show()
                     } else {

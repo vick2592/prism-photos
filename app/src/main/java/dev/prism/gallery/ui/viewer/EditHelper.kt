@@ -40,20 +40,27 @@ object EditHelper {
     /**
      * Returns the MediaStore collection URI that matches the storage volume of [originalUri].
      *
-     * On API 29+, MediaStore URIs have the form:
-     *   content://media/{volumeName}/images/media/{id}
-     * where volumeName is "external_primary" for internal/emulated storage, or a UUID for
-     * a removable SD card (e.g. "12A8-4F3D").
-     *
-     * The virtual "external" volume is a read-only combined view and cannot be used for
-     * insert — in that case we fall back to external_primary.
+     * IMPORTANT: All URIs built with ContentUris.withAppendedId(EXTERNAL_CONTENT_URI, id) have
+     * "external" as their first path segment — parsing the segment always yields internal storage.
+     * Instead we query the VOLUME_NAME column from the original file's MediaStore record, which
+     * gives the real volume ("external_primary" for internal storage, or the SD-card UUID like
+     * "7cdf-e0dc" for a removable card).
      */
-    private fun volumeCollectionUri(originalUri: Uri): Uri {
+    private fun volumeCollectionUri(context: Context, originalUri: Uri): Uri {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val volumeName = originalUri.pathSegments.firstOrNull()?.let { segment ->
-                if (segment == "external") MediaStore.VOLUME_EXTERNAL_PRIMARY else segment
-            } ?: MediaStore.VOLUME_EXTERNAL_PRIMARY
-            return MediaStore.Images.Media.getContentUri(volumeName)
+            val projection = arrayOf(MediaStore.MediaColumns.VOLUME_NAME)
+            context.contentResolver.query(originalUri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val col = cursor.getColumnIndex(MediaStore.MediaColumns.VOLUME_NAME)
+                    if (col >= 0) {
+                        val volumeName = cursor.getString(col)
+                        if (!volumeName.isNullOrEmpty()) {
+                            return MediaStore.Images.Media.getContentUri(volumeName)
+                        }
+                    }
+                }
+            }
+            return MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         }
         return MediaStore.Images.Media.EXTERNAL_CONTENT_URI
     }
@@ -170,7 +177,7 @@ object EditHelper {
 
             // Insert into the same volume as the original (SD card or internal storage)
             val outputUri = context.contentResolver.insert(
-                volumeCollectionUri(originalUri), values
+                volumeCollectionUri(context, originalUri), values
             ) ?: return@withContext null
 
             context.contentResolver.openInputStream(editedUri)?.use { input ->
