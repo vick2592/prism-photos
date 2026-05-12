@@ -385,6 +385,7 @@ fun ViewerScreen(
             },
         )
     }
+}
 
 @Composable
 private fun ZoomableImage(
