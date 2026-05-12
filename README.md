@@ -29,9 +29,9 @@ A modern, privacy-first Android photo and video gallery built entirely with Kotl
 | **Trash (30-day)** | Soft-delete with restore, permanent delete, and days-remaining badge |
 | **Auto-purge** | WorkManager background job purges trash older than 30 days |
 | **Image editing** | Crop and rotate with UCrop — saves a new copy in the same folder AND same storage volume (SD card or internal) as the original, named `photo_2.jpg` (auto-incrementing) |
-| **Slideshow** | Auto-advancing fullscreen slideshow with play/pause and configurable interval |
-| **Settings** | Grid columns (2/3/4), slideshow interval (2/3/5/10s), gallery source album picker (dialog with checkboxes) — all persisted with DataStore |
-| **Dynamic color** | Material You Monet theming on Android 12+, purple fallback on older devices |
+| Multi-select in gallery | Long-press any photo to enter selection mode. Tap photos to add/remove. Action bar shows count with Share, Trash, and permanent Delete buttons. Back button exits selection |
+| **3-dot overflow menu in viewer** | MoreVert button (top-right, auto-hides on zoom) with Slideshow, Set as wallpaper, and Delete from device options |
+| **Permanent delete from viewer** | Confirmation dialog → `contentResolver.delete()` with `MANAGE_MEDIA` permission — no system consent dialog on API 31+ |
 
 ---
 
@@ -160,6 +160,11 @@ Prism is 100% local. It:
 | Video on adjacent pages blocking swipe | Adjacent pages render a static thumbnail instead of live `ExoPlayer` |
 | UCrop result callback referencing stale item | `editingDisplayName` state var captured at tap time |
 | Cropped photo not appearing in gallery | `DATE_TAKEN`, `DATE_ADDED`, `DATE_MODIFIED` now written to MediaStore on save |
+| Crop saved to wrong storage volume | `EditHelper.volumeCollectionUri()` queries `VOLUME_NAME` column instead of parsing URI path segment — now correctly targets SD card or internal storage |
+| Viewer pager drifts after crop save | `pendingScrollToId` + `LaunchedEffect` scrolls pager to crop's actual index when the reactive list updates |
+| Viewer sort inconsistent with gallery | All sort paths now use `compareByDescending{dateTaken OR dateModified×1000}.thenByDescending{id}` — gallery, viewer, and MediaStore SQL query all agree |
+| Crop sorted to bottom when original has no EXIF date | `editingDateTaken` falls back to `dateModified×1000L` when `dateTaken==0` |
+| Slideshow showing all photos regardless of gallery filter | `SlideshowViewModel` now applies `isInDcim + extraGalleryBucketIds` filter matching the gallery grid |
 | `bucketId` type mismatch in navigation | `Album.id` and `MediaItem.bucketId` correctly typed as `String` |
 
 ---
@@ -167,14 +172,121 @@ Prism is 100% local. It:
 ## Roadmap
 
 - [x] All core gallery features
-- [x] Debug APK — beta testing in progress
-- [ ] **Investigate:** Photos saved to `DCIM/Prism/` (cropped edits) appear in the Prism album but not in the main gallery grid — requires deeper investigation into why `DCIM/Prism` is excluded from the all-media query
+- [x] Multi-select (long press to select, share/trash/delete selected)
+- [x] Viewer 3-dot menu (slideshow, set wallpaper, permanent delete)
+- [x] Debug APK — beta testing complete
+- [ ] **Touch UX polish** — improve scroll smoothness and gesture responsiveness:
+  - Faster thumbnail decode on first open (pre-warm Coil disk cache)
+  - Eliminate jank when tapping a photo immediately after a fast grid scroll (input event debounce tuning)
+  - Reduce swipe-to-next-photo latency in the viewer (beyondViewportPageCount tuning + Coil prefetch)
+  - Selection mode: drag gesture to select a range of photos without lifting finger
+  - Haptic feedback on long-press to enter selection mode
 - [ ] Signed release APK
+- [ ] Publish to Google Play
 - [ ] `ACTION_VIEW` intent filters (appear in "Open with" chooser)
-- [ ] Wallpaper setter
 - [ ] Sort options (date ascending, size, name)
-- [ ] Bulk select and delete / share
 - [ ] Create album folder from within the app
+- [ ] Print support (`androidx.print`)
+- [ ] Home screen widget (latest photo, or random from an album)
+
+---
+
+## Releasing to Google Play
+
+### 1. Create a signing keystore (once)
+```bash
+keytool -genkey -v -keystore prism-release.jks -keyAlias prism -keyalg RSA -keysize 2048 -validity 10000
+```
+Store this file safely — losing it means you can never update the app on Play.
+
+### 2. Configure signing in `app/build.gradle.kts`
+```kotlin
+signingConfigs {
+    create("release") {
+        storeFile = file("../prism-release.jks")
+        storePassword = System.getenv("KEYSTORE_PASSWORD")
+        keyAlias = "prism"
+        keyPassword = System.getenv("KEY_PASSWORD")
+    }
+}
+release {
+    signingConfig = signingConfigs.getByName("release")
+    isMinifyEnabled = true
+    isShrinkResources = true
+}
+```
+
+### 3. Build a signed AAB
+**Build → Generate Signed Bundle / APK → Android App Bundle**
+Output: `app/build/outputs/bundle/release/app-release.aab`
+
+### 4. Google Play Console checklist
+- [ ] Create developer account at [play.google.com/console](https://play.google.com/console) ($25 one-time fee)
+- [ ] Create new app — **Package name: `dev.prism.gallery`** (permanent, cannot change)
+- [ ] Complete store listing:
+  - [ ] App title, short description (80 chars), full description
+  - [ ] Screenshots: phone (min 2), 7-inch tablet optional, 10-inch tablet optional
+  - [ ] Feature graphic (1024×500)
+  - [ ] App icon (512×512 PNG, already done)
+  - [ ] Privacy policy URL (required — even for local-only apps)
+- [ ] Complete content rating questionnaire (no violence, no user-generated content → "Everyone")
+- [ ] Set up target audience (general public, not children → no COPPA concerns)
+- [ ] Upload AAB to **Internal testing** track first → test on device → promote to **Production**
+- [ ] No `INTERNET` permission declared → no data safety section required beyond confirming no data is collected
+
+### 5. Privacy policy
+Because Prism accesses photos, Google requires a privacy policy URL even though nothing is transmitted. A minimal hosted page stating "Prism does not collect, transmit, or share any data. All photos remain on your device." is sufficient.
+
+---
+
+## Releasing to Google Play
+
+### 1. Create a signing keystore (once)
+```bash
+keytool -genkey -v -keystore prism-release.jks -keyAlias prism -keyalg RSA -keysize 2048 -validity 10000
+```
+Store this file safely — losing it means you can never update the app on Play.
+
+### 2. Configure signing in `app/build.gradle.kts`
+```kotlin
+signingConfigs {
+    create("release") {
+        storeFile = file("../prism-release.jks")
+        storePassword = System.getenv("KEYSTORE_PASSWORD")
+        keyAlias = "prism"
+        keyPassword = System.getenv("KEY_PASSWORD")
+    }
+}
+release {
+    signingConfig = signingConfigs.getByName("release")
+    isMinifyEnabled = true
+    isShrinkResources = true
+}
+```
+
+### 3. Build a signed AAB
+**Build → Generate Signed Bundle / APK → Android App Bundle**  
+Output: `app/build/outputs/bundle/release/app-release.aab`
+
+### 4. Google Play Console checklist
+- [ ] Create developer account at [play.google.com/console](https://play.google.com/console) ($25 one-time fee)
+- [ ] Create new app — **Package name: `dev.prism.gallery`** (permanent, cannot change after first publish)
+- [ ] Complete store listing:
+  - [ ] App title, short description (80 chars max), full description
+  - [ ] Screenshots: at least 2 phone screenshots
+  - [ ] Feature graphic (1024×500 px)
+  - [ ] App icon (512×512 PNG)
+  - [ ] Privacy policy URL (required even for local-only apps)
+- [ ] Content rating questionnaire — no violence, no user-generated content → "Everyone"
+- [ ] Target audience — general public, not directed at children (no COPPA/GDPR-K requirements)
+- [ ] Upload AAB to **Internal testing** track first → test on device → promote to **Production**
+- [ ] Data safety section — Prism collects no data, select "No" for all data collection questions
+
+### 5. Privacy policy
+Google requires a privacy policy URL even for apps that collect nothing. A minimal hosted page is sufficient:
+> "Prism does not collect, transmit, store, or share any personal data or photos. All media remains on your device and is never uploaded anywhere."
+
+A free option: publish as a GitHub Gist or a simple GitHub Pages page.
 
 ---
 

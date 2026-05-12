@@ -6,7 +6,7 @@
 
 The core philosophy: **your photos live on your device. Prism never touches the cloud.**
 
-> **Status (11 May 2026):** All planned phases complete. App is building and running on device. Currently in beta testing. Three root-cause bugs fixed this session (gallery filter, viewer context, crop save to SD card). Build errors resolved. Next milestone: signed release APK.
+> **Status (11 May 2026):** Beta testing complete. All major planned features implemented and verified on-device. Preparing for signed release APK and Google Play submission.
 
 ---
 
@@ -264,6 +264,12 @@ UCropActivity is declared in the manifest.
 | Material You dynamic color | ✅ Done | Monet on API 32+, purple fallback |
 | App icon | ✅ Done | White bg, two-tone purple prism, rainbow rays |
 | Bottom nav flash fix | ✅ Done | AnimatedVisibility with 220ms delay |
+| Multi-select in gallery | ✅ Done | Long-press to enter selection mode; tap to toggle; action bar: count, Share, Trash, Delete forever (confirmation dialog); Back exits |
+| Viewer 3-dot menu | ✅ Done | MoreVert top-right, auto-hides on zoom/tap; Slideshow / Set as wallpaper (photos only) / Delete from device |
+| Permanent delete from viewer | ✅ Done | `contentResolver.delete()` + `MANAGE_MEDIA`; confirmation dialog; Toast + navigate back |
+| Overlay auto-hide on zoom | ✅ Done | `overlaysVisible = uiVisible && !isZoomedIn`; `ZoomableImage.onZoomStateChange` callback at 1.05× |
+| Scrollbar thumb | ✅ Done | 8dp pill thumb (vs 3dp track), alpha 0.70; easier to see and grab |
+| Touch UX polish | ⬜ Roadmap | See roadmap below |
 | `ACTION_VIEW` intent filters | ⬜ Roadmap | Allows Prism to appear in "Open with" |
 | Wallpaper setter | ⬜ Roadmap | |
 | Sort options | ⬜ Roadmap | Date ascending, size, name |
@@ -298,6 +304,12 @@ UCropActivity is declared in the manifest.
 | No way to permanently delete from viewer | Added 3-dot MoreVert menu (Slideshow / Set as wallpaper / Delete from device); permanent delete via `contentResolver.delete()` + confirmation dialog; `MediaStoreRepository.deleteItemPermanently()` + `ViewerViewModel.deleteItemPermanentlyAndWait()` | `41adcc8` |
 | Overlays not hiding on zoom-in | `ZoomableImage.onZoomStateChange` callback fires at 1.05× threshold; `overlaysVisible = uiVisible && !isZoomedIn` | `41adcc8` |
 | Build error: Expecting `}` at `ViewerScreen.kt:543` | Missing closing `}` for `ViewerScreen` composable function after the delete dialog block | `391eae5` |
+| Multi-select: `combinedClickable` long-press + selection state in `GalleryViewModel` | `_selectedIds: MutableStateFlow<Set<Long>>`; `toggleSelection`, `clearSelection`, `trashSelected`, `deleteSelectedPermanently`; `MediaThumbnail` shows dim overlay + checkmark; `MediaGrid` wires `selectedIds` + `onMediaLongClick`; `GalleryScreen` action bar with Share/Trash/Delete | `34a2435` |
+| Crop saved to wrong storage volume | `EditHelper.volumeCollectionUri()` now queries `MediaStore.MediaColumns.VOLUME_NAME` column instead of parsing URI path segment (always was `"external"` → always internal); returns real volume UUID for SD card | `1a20cb1` |
+| Viewer pager drifts after crop save | `pendingScrollToId: Long?` state set to `ContentUris.parseId(saved)` after crop; `LaunchedEffect(state.items, pendingScrollToId)` scrolls pager to crop index when list updates | `1a20cb1` |
+| Slideshow shows all photos (ignores gallery filter) | `SlideshowViewModel` now uses 3-flow `combine(observeMedia, observeTrash, extraGalleryBucketIds)` with `isInDcim + extraBuckets` filter | `1558dc4` |
+| Viewer sort inconsistent with gallery (crop went to bottom) | All sort paths unified: `compareByDescending{dateTaken OR dateModified×1000}.thenByDescending{id}`; MediaStore SQL query now `DATE_TAKEN DESC, _ID DESC`; crops (higher `_ID`, same `DATE_TAKEN`) always sort immediately before their originals | `c6a1458` |
+| `editingDateTaken` was 0 for photos with no EXIF date | `editingDateTaken` now uses `dateModified×1000L` as fallback when `dateTaken==0`; prevents crop from getting `DATE_TAKEN=0` in MediaStore | `c6a1458` |
 
 ---
 
@@ -305,7 +317,7 @@ UCropActivity is declared in the manifest.
 
 | Issue | Notes |
 |-------|-------|
-| **Viewer pager index drifts after crop save** | After a crop is saved, the `ContentObserver` fires and the `ViewerViewModel` list updates reactively. The new crop is inserted into the sorted list at whatever position its `DATE_TAKEN` sorts to. `HorizontalPager` tracks the current position as an **integer index**, not by item identity — so when a new item is inserted before the current page, every subsequent item shifts right by 1 and the pager ends up pointing at the wrong photo. The crop always appears at the "beginning" (index 0 / leftmost) because — despite the `originalDateTaken` fix — `DATE_ADDED` and `DATE_MODIFIED` on the new MediaStore row are set to the current time by the OS and may act as a tiebreaker in MediaStore's sort order, effectively pushing the crop to position 0 among items with the same `DATE_TAKEN`. Additionally, `editingDateTaken` could be 0L if `currentItem.dateTaken` is 0 for any reason. **Fix approach (for next session):** After the UCrop result returns and the copy is saved, call `viewModel.load(newMediaId)` to reload the viewer **starting from the new item's actual index** in the fresh list, rather than relying on the live reactive update to preserve the current index. Alternatively, change the pager to track items by `MediaItem.id` (key-based scrolling) so list insertions do not shift the current page. A third option is to suppress the `ContentObserver`-triggered viewer reload while the viewer is open and only refresh on the next cold open. |
+| **Touch UX polish (planned)** | Current gesture handling works correctly but has rough edges under load: (1) tapping a photo immediately after a fast fling can feel sluggish — Coil is still decoding thumbnails and the tap-to-open transition stalls; (2) selection mode has no drag-to-select (finger held down + slide) — only discrete taps; (3) no haptic feedback on long-press; (4) viewer swipe to next photo has a tiny input latency because `beyondViewportPageCount = 1` pre-loads one page but Coil still needs to decode the full image. **Plan:** tune `beyondViewportPageCount`, add Coil `MemoryCache` warming for adjacent items, add `HapticFeedbackType.LongPress` on selection entry, investigate `Modifier.pointerInput` drag-select for `LazyVerticalGrid`. |
 
 ---
 
