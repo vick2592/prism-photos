@@ -14,6 +14,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,8 +46,9 @@ sealed class Screen(val route: String) {
     data object Albums : Screen("albums")
     data object Search : Screen("search")
     data object Settings : Screen("settings")
-    data object Viewer : Screen("viewer/{mediaId}") {
-        fun createRoute(mediaId: Long) = "viewer/$mediaId"
+    data object Viewer : Screen("viewer/{mediaId}?filter={filter}") {
+        fun createRoute(mediaId: Long, filter: String = "all") =
+            "viewer/$mediaId?filter=${android.net.Uri.encode(filter)}"
     }
     data object AlbumDetail : Screen("album_detail/{bucketId}/{albumName}") {
         fun createRoute(bucketId: String, albumName: String) =
@@ -80,22 +83,31 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
     )
 
     // Delay showing the nav bar so it doesn't flash over the viewer exit transition
-    var bottomBarVisible by remember { mutableStateOf(showBottomBar) }
+    var routeVisible by remember { mutableStateOf(showBottomBar) }
     LaunchedEffect(showBottomBar) {
         if (showBottomBar) {
             delay(80)
-            bottomBarVisible = true
+            routeVisible = true
         } else {
-            bottomBarVisible = false
+            routeVisible = false
         }
     }
+
+    // Scroll-driven hide: gallery scrolling down hides the bar; scrolling up restores it.
+    var scrollHideNavBar by remember { mutableStateOf(false) }
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != Screen.Gallery.route) scrollHideNavBar = false
+    }
+    val bottomBarVisible = routeVisible && !scrollHideNavBar
 
     Scaffold(
         bottomBar = {
             AnimatedVisibility(
                 visible = bottomBarVisible,
-                enter = fadeIn(animationSpec = tween(150)),
-                exit = fadeOut(animationSpec = tween(0)),
+                enter = fadeIn(animationSpec = tween(150)) +
+                        slideInVertically(initialOffsetY = { it }, animationSpec = tween(200)),
+                exit = fadeOut(animationSpec = tween(120)) +
+                        slideOutVertically(targetOffsetY = { it }, animationSpec = tween(150)),
             ) {
                 NavigationBar {
                     bottomNavItems.forEach { item ->
@@ -125,10 +137,11 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
             composable(Screen.Gallery.route) {
                 GalleryScreen(
                     onMediaClick = { mediaId ->
-                        navController.navigate(Screen.Viewer.createRoute(mediaId))
+                        navController.navigate(Screen.Viewer.createRoute(mediaId, "gallery"))
                     },
                     onSlideshowClick = { navController.navigate(Screen.Slideshow.route) },
                     contentPadding = paddingValues,
+                    onScrollDirectionChange = { scrollingDown -> scrollHideNavBar = scrollingDown },
                 )
             }
             composable(Screen.Albums.route) {
@@ -143,7 +156,7 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
             composable(Screen.Search.route) {
                 SearchScreen(
                     onMediaClick = { mediaId ->
-                        navController.navigate(Screen.Viewer.createRoute(mediaId))
+                        navController.navigate(Screen.Viewer.createRoute(mediaId, "all"))
                     },
                     contentPadding = paddingValues,
                 )
@@ -153,7 +166,13 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
             }
             composable(
                 route = Screen.Viewer.route,
-                arguments = listOf(navArgument("mediaId") { type = NavType.LongType })
+                arguments = listOf(
+                    navArgument("mediaId") { type = NavType.LongType },
+                    navArgument("filter") {
+                        type = NavType.StringType
+                        defaultValue = "all"
+                    },
+                ),
             ) { backStackEntry ->
                 val mediaId = backStackEntry.arguments?.getLong("mediaId") ?: 0L
                 ViewerScreen(
@@ -177,7 +196,9 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
                 AlbumDetailScreen(
                     albumName = albumName,
                     onMediaClick = { mediaId ->
-                        navController.navigate(Screen.Viewer.createRoute(mediaId))
+                        navController.navigate(
+                            Screen.Viewer.createRoute(mediaId, "bucket:$bucketId")
+                        )
                     },
                     onNavigateBack = { navController.navigateUp() },
                 )

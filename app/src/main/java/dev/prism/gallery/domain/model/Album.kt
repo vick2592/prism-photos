@@ -8,4 +8,5 @@ data class Album(
     val coverUri: Uri,       // Most recent item used as cover art
     val count: Int,          // Total number of items
     val dateModified: Long,  // Most recent item's dateTaken for sorting
+    val relativePath: String = "",  // e.g. "DCIM/Camera/" — for DCIM detection
 )

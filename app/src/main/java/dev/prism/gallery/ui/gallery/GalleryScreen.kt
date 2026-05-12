@@ -33,6 +33,7 @@ fun GalleryScreen(
     onMediaClick: (Long) -> Unit,
     onSlideshowClick: () -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(),
+    onScrollDirectionChange: ((scrollingDown: Boolean) -> Unit)? = null,
     viewModel: GalleryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,6 +131,7 @@ fun GalleryScreen(
                         onMediaClick = onMediaClick,
                         contentPadding = contentPadding,
                         columns = gridColumns,
+                        onScrollDirectionChange = onScrollDirectionChange,
                     )
                     FloatingActionButton(
                         onClick = onSlideshowClick,

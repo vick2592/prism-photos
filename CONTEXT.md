@@ -241,9 +241,11 @@ UCropActivity is declared in the manifest.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Gallery grid (date-grouped) | ✅ Done | |
+| Gallery grid (date-grouped) | ✅ Done | Day-level headers: "Today", "Yesterday", "Tue 6 May", "March 2024" |
+| Gallery source filter | ✅ Done | Only DCIM / camera roll by default; extra albums opt-in via Settings |
 | Configurable columns (2/3/4) | ✅ Done | DataStore persisted |
 | Viewer (swipe, zoom, dismiss) | ✅ Done | Custom awaitEachGesture, zoom up to 5× |
+| Double-tap to zoom | ✅ Done | Double-tap zooms to 2.5×; double-tap again resets to 1× |
 | Video playback | ✅ Done | ExoPlayer, controls, only active on current page |
 | Video thumbnails in grid | ✅ Done | Coil VideoFrameDecoder |
 | EXIF info sheet | ✅ Done | Date, size, resolution, GPS + reverse geocode |
@@ -254,9 +256,11 @@ UCropActivity is declared in the manifest.
 | Live search | ✅ Done | 250ms debounce |
 | Trash (30-day soft-delete) | ✅ Done | Days-remaining badge, restore, permanent delete |
 | Trash auto-purge | ✅ Done | WorkManager PeriodicWorkRequest, 1-day interval |
-| Image crop/rotate (UCrop) | ✅ Done | Saves to DCIM/Prism/, DATE_TAKEN set correctly |
+| Image crop/rotate (UCrop) | ✅ Done | Saves copy in same folder as original, named `<original>_2.jpg` (auto-increment) |
 | Slideshow | ✅ Done | Fullscreen HorizontalPager, configurable interval |
-| Settings screen | ✅ Done | Grid columns + slideshow interval |
+| Scrollbar with date label | ✅ Done | Draggable/tappable; pixel-accurate thumb; floating day/month pill while scrolling |
+| Nav bar auto-hide on scroll | ✅ Done | Hides when scrolling down gallery, restores on scroll up via `NestedScrollConnection` |
+| Settings screen | ✅ Done | Grid columns + slideshow interval + gallery source album picker |
 | Material You dynamic color | ✅ Done | Monet on API 32+, purple fallback |
 | App icon | ✅ Done | White bg, two-tone purple prism, rainbow rays |
 | Bottom nav flash fix | ✅ Done | AnimatedVisibility with 220ms delay |
@@ -282,14 +286,20 @@ UCropActivity is declared in the manifest.
 | Search bar + UCrop toolbar behind status bar on Android 15 | `statusBarsPadding()` on SearchScreen column; `windowOptOutEdgeToEdgeEnforcement` on UCropActivity theme | `15b4451` |
 | Swipe-to-dismiss 1-second delay | `onNavigateBack()` called immediately at threshold (not after animation); fly-off reduced 220ms → 120ms; bottom bar delay 220ms → 80ms | `482c103` |
 | Crop save not indexed by MediaStore | `MediaScannerConnection.scanFile()` called after `IS_PENDING=0` update | `482c103` |
+| Crop saved to wrong folder (`DCIM/Prism/`) | `queryRelativePath()` reads original's `RELATIVE_PATH` from MediaStore; saved alongside original as `<name>_2.jpg` | — |
+| Scrollbar missing from gallery grid | `LazyGridState` + pixel-accurate `thumbFraction` using `firstVisibleItemScrollOffset`; 8dp end-inset; 20dp touch target | — |
+| Gallery showed all folders in main grid | `isCameraRoll()` filter in `GalleryViewModel`; extra buckets opt-in via `extraGalleryBucketIds` in DataStore | — |
+| Nav bar did not auto-hide on scroll | `NestedScrollConnection` in `MediaGrid` calls `onScrollDirectionChange`; `NavGraph` drives `scrollHideNavBar` with `slideInVertically`/`slideOutVertically` | — |
+| Double-tap zoom missing in viewer | `onDoubleTap` in `detectTapGestures`: 2.5× on first tap, reset on second | — |
+| Date headers too coarse (month only) | `formatDateLabel()` in `GalleryViewModel`: "Today" / "Yesterday" / day-of-week / month+year | — |
 
 ---
 
-## Known Open Issues (Roadmap)
+## Known Open Issues (Side Notes)
 
 | Issue | Notes |
 |-------|-------|
-| `DCIM/Prism` photos not appearing in main gallery grid | Cropped edits are visible in the **Prism album** but absent from the all-media gallery grid. Likely a MediaStore query filter or `IS_PENDING` timing issue specific to this path. Needs investigation. |
+| Cropped copy sorted to wrong position in Prism gallery | Google Photos places it correctly (EXIF metadata is fine). Cause: `EditHelper.saveToMediaStore` sets `DATE_TAKEN = now` (edit time) instead of the original photo's `dateTaken`. Fix: pass `originalDateTaken: Long` as a parameter and write it to `MediaStore.Images.Media.DATE_TAKEN`. |
 
 ---
 

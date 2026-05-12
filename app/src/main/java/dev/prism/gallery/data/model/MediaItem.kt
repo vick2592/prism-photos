@@ -14,6 +14,7 @@ data class MediaItem(
     val size: Long,
     val bucketId: String,
     val bucketName: String,
+    val relativePath: String = "",  // e.g. "DCIM/Camera/" — reliable on API 29+
     val duration: Long = 0L,       // milliseconds; 0 for images
     val latitude: Double? = null,
     val longitude: Double? = null,

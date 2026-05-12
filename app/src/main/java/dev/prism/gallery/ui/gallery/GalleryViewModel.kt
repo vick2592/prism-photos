@@ -16,10 +16,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
+
+/** Returns true if [relativePath] is under the device's DCIM tree (camera roll). */
+internal fun isInDcim(relativePath: String): Boolean =
+    relativePath.startsWith("DCIM/", ignoreCase = true)
 
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
@@ -34,27 +39,47 @@ class GalleryViewModel @Inject constructor(
     val gridColumns: StateFlow<Int> = prefs.gridColumns
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PreferencesRepository.DEFAULT_GRID_COLUMNS)
 
+    private val zone = ZoneId.systemDefault()
+    private val dayOfWeekFormatter = DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())
     private val monthYearFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
+
     private var mediaJob: Job? = null
+
+    /** Groups a timestamp into a Google-Photos-style date label. */
+    private fun formatDateLabel(ms: Long): String {
+        val date = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+        val today = LocalDate.now(zone)
+        return when {
+            date == today -> "Today"
+            date == today.minusDays(1) -> "Yesterday"
+            date.year == today.year -> date.format(dayOfWeekFormatter)   // "Tue, 6 May"
+            else -> date.format(monthYearFormatter)                        // "March 2024"
+        }
+    }
 
     fun loadMedia() {
         mediaJob?.cancel()
         mediaJob = viewModelScope.launch {
-            combine(getGalleryUseCase(), trashDao.observeTrash()) { items, trashed ->
+            combine(
+                getGalleryUseCase(),
+                trashDao.observeTrash(),
+                prefs.extraGalleryBucketIds,
+            ) { items, trashed, extraBuckets ->
                 val trashedIds = trashed.map { it.mediaId }.toSet()
-                items.filter { it.id !in trashedIds }
+                items
+                    .filter { it.id !in trashedIds }
+                    .filter { isInDcim(it.relativePath) || it.bucketId in extraBuckets }
             }
                 .catch { e -> _uiState.value = GalleryUiState.Error(e.message ?: "Unknown error") }
                 .collect { items ->
+                    val sorted = items.sortedByDescending {
+                        if (it.dateTaken > 0) it.dateTaken else it.dateModified * 1000L
+                    }
                     val grouped = LinkedHashMap<String, MutableList<dev.prism.gallery.data.model.MediaItem>>()
-                    items.forEach { item ->
-                        val label = if (item.dateTaken > 0) {
-                            Instant.ofEpochMilli(item.dateTaken)
-                                .atZone(ZoneId.systemDefault())
-                                .format(monthYearFormatter)
-                        } else {
-                            "Unknown Date"
-                        }
+                    sorted.forEach { item ->
+                        val effectiveMs = if (item.dateTaken > 0) item.dateTaken
+                                          else item.dateModified * 1000L
+                        val label = if (effectiveMs > 0) formatDateLabel(effectiveMs) else "Unknown Date"
                         grouped.getOrPut(label) { mutableListOf() }.add(item)
                     }
                     _uiState.value = GalleryUiState.Success(grouped)

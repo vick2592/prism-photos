@@ -20,6 +20,7 @@ class GetAlbumsUseCase @Inject constructor(
                     coverUri = sorted.first().uri,
                     count = mediaItems.size,
                     dateModified = sorted.first().dateTaken,
+                    relativePath = sorted.first().relativePath,
                 )
             }
             .sortedByDescending { it.dateModified }

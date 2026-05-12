@@ -4,6 +4,8 @@ import android.content.ContentUris
 import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -85,6 +87,12 @@ class MediaStoreRepository @Inject constructor(
             MediaStore.MediaColumns.SIZE,
             MediaStore.MediaColumns.BUCKET_ID,
             MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
+            // RELATIVE_PATH (API 29+) gives "DCIM/Camera/" reliably.
+            // DATA (API 26-28) gives the absolute path as fallback.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                MediaStore.MediaColumns.RELATIVE_PATH
+            else
+                MediaStore.MediaColumns.DATA,
         )
         val projection = if (isVideo) {
             baseProjection + arrayOf(MediaStore.Video.VideoColumns.DURATION)
@@ -110,12 +118,31 @@ class MediaStoreRepository @Inject constructor(
             val bucketIdCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
             val bucketNameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
             val durationCol = if (isVideo) cursor.getColumnIndex(MediaStore.Video.VideoColumns.DURATION) else -1
+            val relativePathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+            else -1
+            val dataCol = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q)
+                cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+            else -1
+            val extRoot = Environment.getExternalStorageDirectory().absolutePath
 
             while (cursor.moveToNext()) {
                 val mimeType = cursor.getString(mimeCol) ?: continue
                 val id = cursor.getLong(idCol)
                 val contentUri = ContentUris.withAppendedId(uri, id)
                 val duration = if (isVideo && durationCol != -1) cursor.getLong(durationCol) else 0L
+
+                // Derive relativePath: "DCIM/Camera/" style, always ends with "/"
+                val relativePath = when {
+                    relativePathCol >= 0 -> cursor.getString(relativePathCol) ?: ""
+                    dataCol >= 0 -> {
+                        val absPath = cursor.getString(dataCol) ?: ""
+                        val rel = absPath.removePrefix(extRoot).trimStart('/')
+                        val dir = rel.substringBeforeLast('/')
+                        if (dir.isEmpty()) "" else "$dir/"
+                    }
+                    else -> ""
+                }
 
                 items += MediaItem(
                     id = id,
@@ -128,6 +155,10 @@ class MediaStoreRepository @Inject constructor(
                     height = cursor.getInt(heightCol),
                     size = cursor.getLong(sizeCol),
                     bucketId = cursor.getString(bucketIdCol) ?: "",
+                    bucketName = cursor.getString(bucketNameCol) ?: "Unknown",
+                    relativePath = relativePath,
+                    duration = duration,
+                )
                     bucketName = cursor.getString(bucketNameCol) ?: "Unknown",
                     duration = duration,
                 )

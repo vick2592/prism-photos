@@ -100,9 +100,10 @@ fun ViewerScreen(
     var currentExif by remember { mutableStateOf(MediaExif()) }
     val infoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
-    // Holds the display name of the item being edited so the result callback doesn't
-    // need to reference currentItem (which isn't in scope at launcher definition time).
+    // Holds the display name and original URI of the item being edited so the result
+    // callback doesn't need to reference currentItem (not in scope at definition time).
     var editingDisplayName by remember { mutableStateOf("") }
+    var editingSourceUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
     // UCrop result launcher
     val editLauncher = rememberLauncherForActivityResult(
@@ -112,10 +113,11 @@ fun ViewerScreen(
             val outputUri = UCrop.getOutput(result.data!!)
             if (outputUri != null) {
                 val displayName = editingDisplayName
+                val sourceUri = editingSourceUri
                 scope.launch {
-                    val saved = withContext(Dispatchers.IO) {
-                        EditHelper.saveToMediaStore(context, outputUri, displayName)
-                    }
+                    val saved = if (sourceUri != null) withContext(Dispatchers.IO) {
+                        EditHelper.saveToMediaStore(context, outputUri, displayName, sourceUri)
+                    } else null
                     EditHelper.cleanupCacheFile(outputUri)
                     if (saved != null) {
                         viewModel.refreshMedia()
@@ -233,6 +235,7 @@ fun ViewerScreen(
                 if (!currentItem.isVideo) {
                     IconButton(onClick = {
                         editingDisplayName = currentItem.displayName
+                        editingSourceUri = currentItem.uri
                         val intent = EditHelper.buildCropIntent(
                             context = context,
                             sourceUri = currentItem.uri,
@@ -346,8 +349,20 @@ private fun ZoomableImage(
                     }
                 }
             }
+            // Tap toggles overlays; double-tap zooms in (2.5×) or resets to 1× if already zoomed.
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onTap() })
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onDoubleTap = {
+                        scope.launch {
+                            if (scale > 1.5f) {
+                                scale = 1f; panX = 0f; panY = 0f
+                            } else {
+                                scale = 2.5f
+                            }
+                        }
+                    },
+                )
             }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
