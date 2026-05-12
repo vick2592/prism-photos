@@ -323,12 +323,15 @@ private fun ZoomableImage(
                                 isMultiTouch = true
                                 val newScale = (scaleAnim.value * event.calculateZoom()).coerceIn(1f, 5f)
                                 val panChange = event.calculatePan()
-                                if (newScale <= 1f) {
-                                    scaleAnim.snapTo(1f); panXAnim.snapTo(0f); panYAnim.snapTo(0f)
-                                } else {
-                                    scaleAnim.snapTo(newScale)
-                                    panXAnim.snapTo(panXAnim.value + panChange.x)
-                                    panYAnim.snapTo(panYAnim.value + panChange.y)
+                                // snapTo is suspend; launch into external scope to exit restricted scope
+                                scope.launch {
+                                    if (newScale <= 1f) {
+                                        scaleAnim.snapTo(1f); panXAnim.snapTo(0f); panYAnim.snapTo(0f)
+                                    } else {
+                                        scaleAnim.snapTo(newScale)
+                                        panXAnim.snapTo(panXAnim.value + panChange.x)
+                                        panYAnim.snapTo(panYAnim.value + panChange.y)
+                                    }
                                 }
                                 event.changes.forEach { it.consume() }
                             }
@@ -339,8 +342,12 @@ private fun ZoomableImage(
                             pressed.size == 1 && scaleAnim.value > 1.05f -> {
                                 // Single-touch pan when zoomed — consume to block pager
                                 val c = pressed[0]
-                                panXAnim.snapTo(panXAnim.value + c.position.x - c.previousPosition.x)
-                                panYAnim.snapTo(panYAnim.value + c.position.y - c.previousPosition.y)
+                                val dx = c.position.x - c.previousPosition.x
+                                val dy = c.position.y - c.previousPosition.y
+                                scope.launch {
+                                    panXAnim.snapTo(panXAnim.value + dx)
+                                    panYAnim.snapTo(panYAnim.value + dy)
+                                }
                                 c.consume()
                             }
                             // Single-touch at scale==1: don't consume → pager + vertical drag handle it
@@ -353,14 +360,14 @@ private fun ZoomableImage(
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = {
-                        scope.launch {
-                            if (scaleAnim.value > 1.5f) {
-                                // Zoom out: animate scale and pan back to identity simultaneously
-                                launch { scaleAnim.animateTo(1f, tween(durationMillis = 280)) }
-                                launch { panXAnim.animateTo(0f, tween(durationMillis = 280)) }
-                                launch { panYAnim.animateTo(0f, tween(durationMillis = 280)) }
-                            } else {
-                                // Zoom in smoothly with a snappy spring (no bounce)
+                        if (scaleAnim.value > 1.5f) {
+                            // Zoom out: launch three parallel tweens — each in its own coroutine
+                            scope.launch { scaleAnim.animateTo(1f, tween(durationMillis = 280)) }
+                            scope.launch { panXAnim.animateTo(0f, tween(durationMillis = 280)) }
+                            scope.launch { panYAnim.animateTo(0f, tween(durationMillis = 280)) }
+                        } else {
+                            // Zoom in with a snappy spring (no bounce)
+                            scope.launch {
                                 scaleAnim.animateTo(
                                     targetValue = 2.5f,
                                     animationSpec = spring(
