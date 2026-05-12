@@ -7,6 +7,7 @@ import dev.prism.gallery.data.local.dao.TrashDao
 import dev.prism.gallery.data.local.MediaStoreRepository
 import dev.prism.gallery.data.model.MediaItem
 import dev.prism.gallery.data.preferences.PreferencesRepository
+import dev.prism.gallery.ui.gallery.isInDcim
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -21,13 +22,18 @@ class SlideshowViewModel @Inject constructor(
     prefs: PreferencesRepository,
 ) : ViewModel() {
 
-    // Images only (no videos), filtered by trash
+    // Images only (no videos), filtered by trash, same source filter as gallery grid
     val images: StateFlow<List<MediaItem>> = combine(
         repository.observeMedia(),
         trashDao.observeTrash(),
-    ) { all, trashed ->
+        prefs.extraGalleryBucketIds,
+    ) { all, trashed, extraBuckets ->
         val trashedIds = trashed.map { it.mediaId }.toSet()
-        all.filter { !it.isVideo && it.id !in trashedIds }
+        all.filter { item ->
+            !item.isVideo &&
+                item.id !in trashedIds &&
+                (isInDcim(item.relativePath) || item.bucketId in extraBuckets)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val intervalSecs: StateFlow<Int> = prefs.slideshowInterval
