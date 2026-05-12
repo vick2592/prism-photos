@@ -178,6 +178,7 @@ fun PrismApp(navController: NavHostController = rememberNavController()) {
                 ViewerScreen(
                     mediaId = mediaId,
                     onNavigateBack = { navController.navigateUp() },
+                    onNavigateToSlideshow = { navController.navigate(Screen.Slideshow.route) },
                 )
             }
             composable(

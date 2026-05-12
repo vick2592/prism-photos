@@ -181,7 +181,7 @@ fun MediaGrid(
                 val thumbTopDp: Dp = with(density) { thumbTopPx.toDp() }
                 val thumbHeightDp: Dp = with(density) { thumbPx.toDp() }
 
-                val thumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                val thumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.70f)
                 val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
 
                 // Track + thumb: 3dp visual inside a SCROLLBAR_TOUCH_WIDTH-dp tap/drag target.
@@ -207,19 +207,22 @@ fun MediaGrid(
                         },
                 ) {
                     val trackW = SCROLLBAR_TRACK_WIDTH.toPx()
+                    val thumbW = 8.dp.toPx()  // thumb is wider than the track for visibility
                     val trackX = size.width - trackW
-                    val r = CornerRadius(trackW / 2f)
+                    val thumbX = size.width - thumbW
+                    // Thin track line
                     drawRoundRect(
                         color = trackColor,
                         topLeft = Offset(trackX, 0f),
                         size = Size(trackW, size.height),
-                        cornerRadius = r,
+                        cornerRadius = CornerRadius(trackW / 2f),
                     )
+                    // Wider pill thumb — visually distinct and easier to grab
                     drawRoundRect(
                         color = thumbColor,
-                        topLeft = Offset(trackX, thumbTopPx),
-                        size = Size(trackW, thumbPx),
-                        cornerRadius = r,
+                        topLeft = Offset(thumbX, thumbTopPx),
+                        size = Size(thumbW, thumbPx),
+                        cornerRadius = CornerRadius(thumbW / 2f),
                     )
                 }
 

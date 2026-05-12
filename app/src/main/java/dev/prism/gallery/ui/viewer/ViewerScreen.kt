@@ -1,5 +1,6 @@
 package dev.prism.gallery.ui.viewer
 
+import android.app.WallpaperManager
 import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
@@ -37,11 +38,15 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -75,6 +80,7 @@ import kotlinx.coroutines.withContext
 fun ViewerScreen(
     mediaId: Long,
     onNavigateBack: () -> Unit,
+    onNavigateToSlideshow: () -> Unit = {},
     viewModel: ViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,16 +99,26 @@ fun ViewerScreen(
         pageCount = { state.items.size },
     )
 
-    var overlaysVisible by remember { mutableStateOf(true) }
+    // uiVisible is toggled by the user (single tap).
+    // isZoomedIn is set automatically when ZoomableImage scale > 1.05.
+    // overlaysVisible combines both so they auto-hide on zoom-in too.
+    var uiVisible by remember { mutableStateOf(true) }
+    var isZoomedIn by remember { mutableStateOf(false) }
+    val overlaysVisible = uiVisible && !isZoomedIn
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showInfoSheet by remember { mutableStateOf(false) }
     var showTrashDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     var currentExif by remember { mutableStateOf(MediaExif()) }
     val infoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
-    // Holds the display name and original URI of the item being edited so the result
-    // callback doesn't need to reference currentItem (not in scope at definition time).
+    // Captured at the moment the user taps Edit so the launcher callback has the correct values.
     var editingDisplayName by remember { mutableStateOf("") }
     var editingSourceUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var editingDateTaken by remember { mutableStateOf(0L) }
+
+    // Reset zoom-in flag when the user swipes to a new page.
+    LaunchedEffect(pagerState.currentPage) { isZoomedIn = false }
 
     // UCrop result launcher
     val editLauncher = rememberLauncherForActivityResult(
@@ -113,9 +129,10 @@ fun ViewerScreen(
             if (outputUri != null) {
                 val displayName = editingDisplayName
                 val sourceUri = editingSourceUri
+                val dateTaken = editingDateTaken
                 scope.launch {
                     val saved = if (sourceUri != null) withContext(Dispatchers.IO) {
-                        EditHelper.saveToMediaStore(context, outputUri, displayName, sourceUri)
+                        EditHelper.saveToMediaStore(context, outputUri, displayName, sourceUri, dateTaken)
                     } else null
                     EditHelper.cleanupCacheFile(outputUri)
                     if (saved != null) {
@@ -171,8 +188,11 @@ fun ViewerScreen(
                 } else {
                     ZoomableImage(
                         item = item,
-                        onTap = { overlaysVisible = !overlaysVisible },
+                        onTap = { uiVisible = !uiVisible },
                         onDismiss = onNavigateBack,
+                        onZoomStateChange = { zoomed ->
+                            if (page == pagerState.currentPage) isZoomedIn = zoomed
+                        },
                     )
                 }
             }
@@ -195,6 +215,53 @@ fun ViewerScreen(
                     tint = Color.White,
                     modifier = Modifier.size(28.dp),
                 )
+            }
+        }
+
+        // Top bar — 3-dot overflow menu (auto-hides with overlays and on zoom-in)
+        AnimatedVisibility(
+            visible = overlaysVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            Box(modifier = Modifier.statusBarsPadding().padding(8.dp)) {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "More options",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Slideshow") },
+                        onClick = { showMoreMenu = false; onNavigateToSlideshow() },
+                    )
+                    if (!currentItem.isVideo) {
+                        DropdownMenuItem(
+                            text = { Text("Set as wallpaper") },
+                            onClick = {
+                                showMoreMenu = false
+                                try {
+                                    val intent = WallpaperManager.getInstance(context)
+                                        .getCropAndSetWallpaperIntent(currentItem.uri)
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Cannot set as wallpaper", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Delete from device", color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMoreMenu = false; showDeleteDialog = true },
+                    )
+                }
             }
         }
 
@@ -235,6 +302,7 @@ fun ViewerScreen(
                     IconButton(onClick = {
                         editingDisplayName = currentItem.displayName
                         editingSourceUri = currentItem.uri
+                        editingDateTaken = currentItem.dateTaken
                         val intent = EditHelper.buildCropIntent(
                             context = context,
                             sourceUri = currentItem.uri,
@@ -291,13 +359,39 @@ fun ViewerScreen(
             },
         )
     }
-}
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete permanently?") },
+            text = { Text("\"${currentItem.displayName}\" will be removed from this device. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val item = currentItem
+                    scope.launch {
+                        val ok = viewModel.deleteItemPermanentlyAndWait(item)
+                        showDeleteDialog = false
+                        if (ok) {
+                            Toast.makeText(context, "Deleted from device", Toast.LENGTH_SHORT).show()
+                            onNavigateBack()
+                        } else {
+                            Toast.makeText(context, "Could not delete this file", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
 
 @Composable
 private fun ZoomableImage(
     item: MediaItem,
     onTap: () -> Unit,
     onDismiss: () -> Unit,
+    onZoomStateChange: ((Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -305,6 +399,11 @@ private fun ZoomableImage(
     val panXAnim = remember { Animatable(0f) }
     val panYAnim = remember { Animatable(0f) }
     val dismissOffset = remember { Animatable(0f) }
+
+    // Notify caller whenever zoom crosses the 1.05 threshold so overlays can auto-hide.
+    LaunchedEffect(scaleAnim.value > 1.05f) {
+        onZoomStateChange?.invoke(scaleAnim.value > 1.05f)
+    }
 
     Box(
         modifier = Modifier

@@ -97,4 +97,8 @@ class ViewerViewModel @Inject constructor(
     fun refreshMedia() {
         repository.refresh()
     }
+
+    /** Permanently removes the item from MediaStore. Returns true on success. */
+    suspend fun deleteItemPermanentlyAndWait(item: MediaItem): Boolean =
+        repository.deleteItemPermanently(item.uri)
 }

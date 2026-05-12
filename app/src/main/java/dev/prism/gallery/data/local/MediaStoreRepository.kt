@@ -163,4 +163,15 @@ class MediaStoreRepository @Inject constructor(
         }
         return items
     }
+
+    /**
+     * Permanently removes [uri] from MediaStore (and the underlying file).
+     * With MANAGE_MEDIA permission on API 31+, no user consent dialog is shown.
+     * Returns true if at least one row was deleted.
+     */
+    suspend fun deleteItemPermanently(uri: Uri): Boolean =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching { context.contentResolver.delete(uri, null, null) > 0 }
+                .getOrDefault(false)
+        }
 }
