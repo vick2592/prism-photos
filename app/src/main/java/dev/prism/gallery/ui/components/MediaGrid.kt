@@ -67,6 +67,8 @@ fun MediaGrid(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     columns: Int = 3,
     onScrollDirectionChange: ((scrollingDown: Boolean) -> Unit)? = null,
+    selectedIds: Set<Long> = emptySet(),
+    onMediaLongClick: ((Long) -> Unit)? = null,
 ) {
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
@@ -154,6 +156,9 @@ fun MediaGrid(
                     MediaThumbnail(
                         item = item,
                         onClick = { onMediaClick(item.id) },
+                        isSelected = item.id in selectedIds,
+                        isSelecting = selectedIds.isNotEmpty(),
+                        onLongClick = onMediaLongClick?.let { { it(item.id) } },
                     )
                 }
             }

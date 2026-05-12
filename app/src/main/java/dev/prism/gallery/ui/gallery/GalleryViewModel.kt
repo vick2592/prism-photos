@@ -3,9 +3,12 @@ package dev.prism.gallery.ui.gallery
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.prism.gallery.data.local.MediaStoreRepository
 import dev.prism.gallery.data.local.dao.TrashDao
+import dev.prism.gallery.data.model.MediaItem
 import dev.prism.gallery.data.preferences.PreferencesRepository
 import dev.prism.gallery.domain.usecase.GetGalleryUseCase
+import dev.prism.gallery.domain.usecase.TrashMediaUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,10 +34,39 @@ class GalleryViewModel @Inject constructor(
     private val getGalleryUseCase: GetGalleryUseCase,
     private val trashDao: TrashDao,
     private val prefs: PreferencesRepository,
+    private val trashMediaUseCase: TrashMediaUseCase,
+    private val repository: MediaStoreRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<GalleryUiState>(GalleryUiState.Loading)
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
+
+    // ---------- Selection ----------
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+
+    fun toggleSelection(id: Long) {
+        _selectedIds.value = if (id in _selectedIds.value) _selectedIds.value - id else _selectedIds.value + id
+    }
+
+    fun clearSelection() { _selectedIds.value = emptySet() }
+
+    fun trashSelected(allItems: List<MediaItem>) {
+        val ids = _selectedIds.value
+        viewModelScope.launch {
+            allItems.filter { it.id in ids }.forEach { trashMediaUseCase(it) }
+            clearSelection()
+        }
+    }
+
+    fun deleteSelectedPermanently(allItems: List<MediaItem>) {
+        val ids = _selectedIds.value
+        viewModelScope.launch {
+            allItems.filter { it.id in ids }.forEach { repository.deleteItemPermanently(it.uri) }
+            clearSelection()
+        }
+    }
+    // ----------------------------------
 
     val gridColumns: StateFlow<Int> = prefs.gridColumns
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PreferencesRepository.DEFAULT_GRID_COLUMNS)
