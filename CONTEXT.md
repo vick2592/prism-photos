@@ -6,7 +6,7 @@
 
 The core philosophy: **your photos live on your device. Prism never touches the cloud.**
 
-> **Status (11 May 2026):** All planned phases complete. App is building and running on device. Currently in beta testing — debug APK being distributed to friends. Next milestone is signed release APK.
+> **Status (11 May 2026):** All planned phases complete. App is building and running on device. Currently in beta testing. Three root-cause bugs fixed this session (gallery filter, viewer context, crop save to SD card). Build errors resolved. Next milestone: signed release APK.
 
 ---
 
@@ -242,10 +242,10 @@ UCropActivity is declared in the manifest.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Gallery grid (date-grouped) | ✅ Done | Day-level headers: "Today", "Yesterday", "Tue 6 May", "March 2024" |
-| Gallery source filter | ✅ Done | Only DCIM / camera roll by default; extra albums opt-in via Settings |
+| Gallery source filter | ✅ Done | `RELATIVE_PATH.startsWith("DCIM/")` (OEM-safe); extra albums opt-in via Settings dialog |
 | Configurable columns (2/3/4) | ✅ Done | DataStore persisted |
 | Viewer (swipe, zoom, dismiss) | ✅ Done | Custom awaitEachGesture, zoom up to 5× |
-| Double-tap to zoom | ✅ Done | Double-tap zooms to 2.5×; double-tap again resets to 1× |
+| Double-tap to zoom | ✅ Done | Animated with spring (zoom-in) + tween (zoom-out); double-tap again resets to 1× |
 | Video playback | ✅ Done | ExoPlayer, controls, only active on current page |
 | Video thumbnails in grid | ✅ Done | Coil VideoFrameDecoder |
 | EXIF info sheet | ✅ Done | Date, size, resolution, GPS + reverse geocode |
@@ -256,11 +256,11 @@ UCropActivity is declared in the manifest.
 | Live search | ✅ Done | 250ms debounce |
 | Trash (30-day soft-delete) | ✅ Done | Days-remaining badge, restore, permanent delete |
 | Trash auto-purge | ✅ Done | WorkManager PeriodicWorkRequest, 1-day interval |
-| Image crop/rotate (UCrop) | ✅ Done | Saves copy in same folder as original, named `<original>_2.jpg` (auto-increment) |
+| Image crop/rotate (UCrop) | ✅ Done | Saves copy in same folder AND same storage volume (SD card or internal) as original, named `<original>_2.jpg` (auto-increment) |
 | Slideshow | ✅ Done | Fullscreen HorizontalPager, configurable interval |
 | Scrollbar with date label | ✅ Done | Draggable/tappable; pixel-accurate thumb; floating day/month pill while scrolling |
 | Nav bar auto-hide on scroll | ✅ Done | Hides when scrolling down gallery, restores on scroll up via `NestedScrollConnection` |
-| Settings screen | ✅ Done | Grid columns + slideshow interval + gallery source album picker |
+| Settings screen | ✅ Done | Grid columns + slideshow interval + gallery source album picker (dialog with checkboxes) |
 | Material You dynamic color | ✅ Done | Monet on API 32+, purple fallback |
 | App icon | ✅ Done | White bg, two-tone purple prism, rainbow rays |
 | Bottom nav flash fix | ✅ Done | AnimatedVisibility with 220ms delay |
@@ -286,12 +286,13 @@ UCropActivity is declared in the manifest.
 | Search bar + UCrop toolbar behind status bar on Android 15 | `statusBarsPadding()` on SearchScreen column; `windowOptOutEdgeToEdgeEnforcement` on UCropActivity theme | `15b4451` |
 | Swipe-to-dismiss 1-second delay | `onNavigateBack()` called immediately at threshold (not after animation); fly-off reduced 220ms → 120ms; bottom bar delay 220ms → 80ms | `482c103` |
 | Crop save not indexed by MediaStore | `MediaScannerConnection.scanFile()` called after `IS_PENDING=0` update | `482c103` |
-| Crop saved to wrong folder (`DCIM/Prism/`) | `queryRelativePath()` reads original's `RELATIVE_PATH` from MediaStore; saved alongside original as `<name>_2.jpg` | — |
-| Scrollbar missing from gallery grid | `LazyGridState` + pixel-accurate `thumbFraction` using `firstVisibleItemScrollOffset`; 8dp end-inset; 20dp touch target | — |
-| Gallery showed all folders in main grid | `isCameraRoll()` filter in `GalleryViewModel`; extra buckets opt-in via `extraGalleryBucketIds` in DataStore | — |
-| Nav bar did not auto-hide on scroll | `NestedScrollConnection` in `MediaGrid` calls `onScrollDirectionChange`; `NavGraph` drives `scrollHideNavBar` with `slideInVertically`/`slideOutVertically` | — |
-| Double-tap zoom missing in viewer | `onDoubleTap` in `detectTapGestures`: 2.5× on first tap, reset on second | — |
-| Date headers too coarse (month only) | `formatDateLabel()` in `GalleryViewModel`: "Today" / "Yesterday" / day-of-week / month+year | — |
+| isCameraRoll() filter broken on Sony OEM folder names | Replaced with `isInDcim(relativePath)` — checks `RELATIVE_PATH.startsWith("DCIM/")`; `MediaItem` + `Album` now carry `relativePath` field queried from MediaStore | `b42a8d2` |
+| Viewer swipe showed photos outside gallery context | `ViewerViewModel` now reads `filter` arg from `SavedStateHandle`; gallery passes `"gallery"`, album detail passes `"bucket:{id}"`, search passes `"all"` | `b42a8d2` |
+| Settings album picker was overflowing horizontal scroll | Replaced `LazyRow` + `FilterChip` with `OutlinedButton` → `AlertDialog` + `LazyColumn` + `Checkbox` | `b42a8d2` |
+| Crop saved to internal storage even when original is on SD card | `EditHelper.volumeCollectionUri()` reads volume name from URI path segments and inserts into the same volume | `3569910` |
+| Double-tap zoom was instant (no animation) | `scale`/`panX`/`panY` converted to `Animatable`; zoom-in uses `spring(NoBouncy)`, zoom-out uses parallel `tween(280ms)` | `3569910` |
+| Build error: stale duplicate lines in `MediaStoreRepository.kt` | Removed leftover `bucketName`/`duration` lines from previous edit | `69d9936` |
+| Build error: Unicode arrow in KDoc caused `DCIM/*` to be parsed as block comment open | Replaced `→` with ASCII `->` in `ViewerViewModel` comment | `69d9936` |
 
 ---
 
@@ -299,7 +300,19 @@ UCropActivity is declared in the manifest.
 
 | Issue | Notes |
 |-------|-------|
-| Cropped copy sorted to wrong position in Prism gallery | Google Photos places it correctly (EXIF metadata is fine). Cause: `EditHelper.saveToMediaStore` sets `DATE_TAKEN = now` (edit time) instead of the original photo's `dateTaken`. Fix: pass `originalDateTaken: Long` as a parameter and write it to `MediaStore.Images.Media.DATE_TAKEN`. |
+| Cropped copy sorted to wrong position in Prism gallery | `EditHelper.saveToMediaStore` sets `DATE_TAKEN = now` (edit time) instead of the original photo's `dateTaken`. Fix: pass `originalDateTaken: Long` as a parameter and write it to `MediaStore.Images.Media.DATE_TAKEN`. |
+
+---
+
+## Step-by-Step Development Rule
+
+> **IMPORTANT — always follow this workflow:**
+> 1. State clearly what change will be made and why, before touching any file.
+> 2. Make the change.
+> 3. Run `get_errors` on every modified file.
+> 4. If there are errors, fix them before proceeding to the next step.
+> 5. Ask the user a question if the correct approach is unclear — never guess at the intention.
+> 6. Update `CONTEXT.md` and `README.md` at the end of every session.
 
 ---
 

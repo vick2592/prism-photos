@@ -11,12 +11,12 @@ A modern, privacy-first Android photo and video gallery built entirely with Kotl
 | Feature | Details |
 |---|---|
 | **Gallery grid** | Date-grouped grid with day-level headers — "Today", "Yesterday", "Tue, 6 May", "March 2024". Configurable 2/3/4 column layout |
-| **Gallery source filter** | Camera roll (DCIM) shown by default. Additional albums can be pinned via Settings |
+| **Gallery source filter** | Camera roll (DCIM/) shown by default — detected via `RELATIVE_PATH` for OEM compatibility. Additional albums can be pinned via Settings dialog |
 | **Scrollbar** | Draggable and tappable right-edge scrollbar with floating day/month label that tracks the thumb position |
 | **Nav bar auto-hide** | Navigation bar slides away when scrolling down the gallery, returns when scrolling up |
 | **Viewer** | Full-screen HorizontalPager — swipe left/right between media |
 | **Pinch-to-zoom** | Smooth multi-touch zoom up to 5× with panning when zoomed in |
-| **Double-tap to zoom** | Double-tap zooms to 2.5× — double-tap again to reset to 1× |
+| **Double-tap to zoom** | Double-tap zooms in smoothly (spring animation); double-tap again zooms out with tween animation |
 | **Swipe to dismiss** | Pull down with spring-back and fly-off animation to return to grid |
 | **Video playback** | ExoPlayer with native transport controls |
 | **Video thumbnails** | First-frame thumbnails in the grid via Coil VideoFrameDecoder |
@@ -28,9 +28,9 @@ A modern, privacy-first Android photo and video gallery built entirely with Kotl
 | **Search** | Live search with 250ms debounce across all display names |
 | **Trash (30-day)** | Soft-delete with restore, permanent delete, and days-remaining badge |
 | **Auto-purge** | WorkManager background job purges trash older than 30 days |
-| **Image editing** | Crop and rotate with UCrop — saves a new copy next to the original, named `photo_2.jpg` (auto-incrementing) |
+| **Image editing** | Crop and rotate with UCrop — saves a new copy in the same folder AND same storage volume (SD card or internal) as the original, named `photo_2.jpg` (auto-incrementing) |
 | **Slideshow** | Auto-advancing fullscreen slideshow with play/pause and configurable interval |
-| **Settings** | Grid columns (2/3/4), slideshow interval (2/3/5/10s), gallery source album picker — all persisted with DataStore |
+| **Settings** | Grid columns (2/3/4), slideshow interval (2/3/5/10s), gallery source album picker (dialog with checkboxes) — all persisted with DataStore |
 | **Dynamic color** | Material You Monet theming on Android 12+, purple fallback on older devices |
 
 ---
