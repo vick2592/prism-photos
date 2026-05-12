@@ -293,6 +293,11 @@ UCropActivity is declared in the manifest.
 | Double-tap zoom was instant (no animation) | `scale`/`panX`/`panY` converted to `Animatable`; zoom-in uses `spring(NoBouncy)`, zoom-out uses parallel `tween(280ms)` | `3569910` |
 | Build error: stale duplicate lines in `MediaStoreRepository.kt` | Removed leftover `bucketName`/`duration` lines from previous edit | `69d9936` |
 | Build error: Unicode arrow in KDoc caused `DCIM/*` to be parsed as block comment open | Replaced `→` with ASCII `->` in `ViewerViewModel` comment | `69d9936` |
+| Viewer swiping to wrong photo after crop | `EditHelper.saveToMediaStore` now accepts `originalDateTaken: Long`; crop copy gets the same `DATE_TAKEN` as the original so it sorts adjacent in the date-sorted list | `41adcc8` |
+| Scrollbar thumb not visible / hard to grab | Thumb widened from 3dp to 8dp pill; alpha raised from 0.45 to 0.70; track remains 3dp | `41adcc8` |
+| No way to permanently delete from viewer | Added 3-dot MoreVert menu (Slideshow / Set as wallpaper / Delete from device); permanent delete via `contentResolver.delete()` + confirmation dialog; `MediaStoreRepository.deleteItemPermanently()` + `ViewerViewModel.deleteItemPermanentlyAndWait()` | `41adcc8` |
+| Overlays not hiding on zoom-in | `ZoomableImage.onZoomStateChange` callback fires at 1.05× threshold; `overlaysVisible = uiVisible && !isZoomedIn` | `41adcc8` |
+| Build error: Expecting `}` at `ViewerScreen.kt:543` | Missing closing `}` for `ViewerScreen` composable function after the delete dialog block | `391eae5` |
 
 ---
 
@@ -300,7 +305,7 @@ UCropActivity is declared in the manifest.
 
 | Issue | Notes |
 |-------|-------|
-| Cropped copy sorted to wrong position in Prism gallery | `EditHelper.saveToMediaStore` sets `DATE_TAKEN = now` (edit time) instead of the original photo's `dateTaken`. Fix: pass `originalDateTaken: Long` as a parameter and write it to `MediaStore.Images.Media.DATE_TAKEN`. |
+| **Viewer pager index drifts after crop save** | After a crop is saved, the `ContentObserver` fires and the `ViewerViewModel` list updates reactively. The new crop is inserted into the sorted list at whatever position its `DATE_TAKEN` sorts to. `HorizontalPager` tracks the current position as an **integer index**, not by item identity — so when a new item is inserted before the current page, every subsequent item shifts right by 1 and the pager ends up pointing at the wrong photo. The crop always appears at the "beginning" (index 0 / leftmost) because — despite the `originalDateTaken` fix — `DATE_ADDED` and `DATE_MODIFIED` on the new MediaStore row are set to the current time by the OS and may act as a tiebreaker in MediaStore's sort order, effectively pushing the crop to position 0 among items with the same `DATE_TAKEN`. Additionally, `editingDateTaken` could be 0L if `currentItem.dateTaken` is 0 for any reason. **Fix approach (for next session):** After the UCrop result returns and the copy is saved, call `viewModel.load(newMediaId)` to reload the viewer **starting from the new item's actual index** in the fresh list, rather than relying on the live reactive update to preserve the current index. Alternatively, change the pager to track items by `MediaItem.id` (key-based scrolling) so list insertions do not shift the current page. A third option is to suppress the `ContentObserver`-triggered viewer reload while the viewer is open and only refresh on the next cold open. |
 
 ---
 
