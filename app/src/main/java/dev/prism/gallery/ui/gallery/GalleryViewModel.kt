@@ -104,9 +104,11 @@ class GalleryViewModel @Inject constructor(
             }
                 .catch { e -> _uiState.value = GalleryUiState.Error(e.message ?: "Unknown error") }
                 .collect { items ->
-                    val sorted = items.sortedByDescending {
-                        if (it.dateTaken > 0) it.dateTaken else it.dateModified * 1000L
-                    }
+                    val sorted = items.sortedWith(
+                        compareByDescending<dev.prism.gallery.data.model.MediaItem> {
+                            if (it.dateTaken > 0L) it.dateTaken else it.dateModified * 1000L
+                        }.thenByDescending { it.id }
+                    )
                     val grouped = LinkedHashMap<String, MutableList<dev.prism.gallery.data.model.MediaItem>>()
                     sorted.forEach { item ->
                         val effectiveMs = if (item.dateTaken > 0) item.dateTaken

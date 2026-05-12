@@ -319,7 +319,10 @@ fun ViewerScreen(
                     IconButton(onClick = {
                         editingDisplayName = currentItem.displayName
                         editingSourceUri = currentItem.uri
-                        editingDateTaken = currentItem.dateTaken
+                        // Use dateModified*1000 as fallback so the crop never gets DATE_TAKEN=0
+                        // (which would sink it to the bottom of the date-sorted viewer list).
+                        editingDateTaken = if (currentItem.dateTaken > 0L) currentItem.dateTaken
+                                           else currentItem.dateModified * 1000L
                         val intent = EditHelper.buildCropIntent(
                             context = context,
                             sourceUri = currentItem.uri,

@@ -70,7 +70,14 @@ class MediaStoreRepository @Inject constructor(
             uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             isVideo = true,
         )
-        return items.sortedByDescending { it.dateTaken }
+        // Sort key matches GalleryViewModel exactly:
+        //   primary  : dateTaken (ms), falling back to dateModified*1000 when dateTaken==0
+        //   secondary: id DESC so that crops (higher _ID, same DATE_TAKEN) sort
+        //              immediately before their originals — guarantees adjacency in the viewer.
+        return items.sortedWith(
+            compareByDescending<MediaItem> { if (it.dateTaken > 0L) it.dateTaken else it.dateModified * 1000L }
+                .thenByDescending { it.id }
+        )
     }
 
     private fun queryUri(uri: Uri, isVideo: Boolean): List<MediaItem> {
@@ -105,7 +112,7 @@ class MediaStoreRepository @Inject constructor(
             projection,
             null,
             null,
-            "${MediaStore.MediaColumns.DATE_TAKEN} DESC",
+            "${MediaStore.MediaColumns.DATE_TAKEN} DESC, ${MediaStore.MediaColumns._ID} DESC",
         )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
             val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
