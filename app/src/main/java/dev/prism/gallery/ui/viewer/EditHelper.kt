@@ -38,6 +38,27 @@ object EditHelper {
     }
 
     /**
+     * Returns the MediaStore collection URI that matches the storage volume of [originalUri].
+     *
+     * On API 29+, MediaStore URIs have the form:
+     *   content://media/{volumeName}/images/media/{id}
+     * where volumeName is "external_primary" for internal/emulated storage, or a UUID for
+     * a removable SD card (e.g. "12A8-4F3D").
+     *
+     * The virtual "external" volume is a read-only combined view and cannot be used for
+     * insert — in that case we fall back to external_primary.
+     */
+    private fun volumeCollectionUri(originalUri: Uri): Uri {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val volumeName = originalUri.pathSegments.firstOrNull()?.let { segment ->
+                if (segment == "external") MediaStore.VOLUME_EXTERNAL_PRIMARY else segment
+            } ?: MediaStore.VOLUME_EXTERNAL_PRIMARY
+            return MediaStore.Images.Media.getContentUri(volumeName)
+        }
+        return MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    }
+
+    /**
      * Queries MediaStore for the RELATIVE_PATH of [originalUri].
      * Falls back to "DCIM/" if the column is unavailable.
      */
@@ -145,8 +166,9 @@ object EditHelper {
                 }
             }
 
+            // Insert into the same volume as the original (SD card or internal storage)
             val outputUri = context.contentResolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+                volumeCollectionUri(originalUri), values
             ) ?: return@withContext null
 
             context.contentResolver.openInputStream(editedUri)?.use { input ->

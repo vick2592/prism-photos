@@ -48,7 +48,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -302,9 +301,9 @@ private fun ZoomableImage(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var scale by remember { mutableFloatStateOf(1f) }
-    var panX by remember { mutableFloatStateOf(0f) }
-    var panY by remember { mutableFloatStateOf(0f) }
+    val scaleAnim = remember { Animatable(1f) }
+    val panXAnim = remember { Animatable(0f) }
+    val panYAnim = remember { Animatable(0f) }
     val dismissOffset = remember { Animatable(0f) }
 
     Box(
@@ -322,14 +321,14 @@ private fun ZoomableImage(
                         when {
                             pressed.size >= 2 -> {
                                 isMultiTouch = true
-                                val newScale = (scale * event.calculateZoom()).coerceIn(1f, 5f)
+                                val newScale = (scaleAnim.value * event.calculateZoom()).coerceIn(1f, 5f)
                                 val panChange = event.calculatePan()
                                 if (newScale <= 1f) {
-                                    scale = 1f; panX = 0f; panY = 0f
+                                    scaleAnim.snapTo(1f); panXAnim.snapTo(0f); panYAnim.snapTo(0f)
                                 } else {
-                                    scale = newScale
-                                    panX += panChange.x
-                                    panY += panChange.y
+                                    scaleAnim.snapTo(newScale)
+                                    panXAnim.snapTo(panXAnim.value + panChange.x)
+                                    panYAnim.snapTo(panYAnim.value + panChange.y)
                                 }
                                 event.changes.forEach { it.consume() }
                             }
@@ -337,11 +336,11 @@ private fun ZoomableImage(
                                 // Consume stray events after multi-touch lifts
                                 event.changes.forEach { it.consume() }
                             }
-                            pressed.size == 1 && scale > 1.05f -> {
+                            pressed.size == 1 && scaleAnim.value > 1.05f -> {
                                 // Single-touch pan when zoomed — consume to block pager
                                 val c = pressed[0]
-                                panX += c.position.x - c.previousPosition.x
-                                panY += c.position.y - c.previousPosition.y
+                                panXAnim.snapTo(panXAnim.value + c.position.x - c.previousPosition.x)
+                                panYAnim.snapTo(panYAnim.value + c.position.y - c.previousPosition.y)
                                 c.consume()
                             }
                             // Single-touch at scale==1: don't consume → pager + vertical drag handle it
@@ -355,10 +354,20 @@ private fun ZoomableImage(
                     onTap = { onTap() },
                     onDoubleTap = {
                         scope.launch {
-                            if (scale > 1.5f) {
-                                scale = 1f; panX = 0f; panY = 0f
+                            if (scaleAnim.value > 1.5f) {
+                                // Zoom out: animate scale and pan back to identity simultaneously
+                                launch { scaleAnim.animateTo(1f, tween(durationMillis = 280)) }
+                                launch { panXAnim.animateTo(0f, tween(durationMillis = 280)) }
+                                launch { panYAnim.animateTo(0f, tween(durationMillis = 280)) }
                             } else {
-                                scale = 2.5f
+                                // Zoom in smoothly with a snappy spring (no bounce)
+                                scaleAnim.animateTo(
+                                    targetValue = 2.5f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                                )
                             }
                         }
                     },
@@ -397,7 +406,7 @@ private fun ZoomableImage(
                         }
                     },
                 ) { _, dragAmount ->
-                    if (scale <= 1.05f && dragAmount > 0f) {
+                    if (scaleAnim.value <= 1.05f && dragAmount > 0f) {
                         scope.launch {
                             dismissOffset.snapTo((dismissOffset.value + dragAmount).coerceAtLeast(0f))
                         }
@@ -417,11 +426,11 @@ private fun ZoomableImage(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = if (scale > 1f) panX else 0f
-                    translationY = if (scale > 1f) panY else dismissOffset.value
-                    alpha = if (scale <= 1f) (1f - dismissOffset.value / 800f).coerceIn(0.2f, 1f) else 1f
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                    translationX = if (scaleAnim.value > 1f) panXAnim.value else 0f
+                    translationY = if (scaleAnim.value > 1f) panYAnim.value else dismissOffset.value
+                    alpha = if (scaleAnim.value <= 1f) (1f - dismissOffset.value / 800f).coerceIn(0.2f, 1f) else 1f
                 },
         )
     }
